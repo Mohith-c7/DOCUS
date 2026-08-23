@@ -46,14 +46,16 @@ const workerHandler = async (job: Job) => {
 
 const globalForWorker = globalThis as unknown as { bullWorker?: Worker };
 
-if (process.env.NODE_ENV === 'production') {
-  worker = new Worker('document-processing', workerHandler, { connection });
-} else {
-  // Prevent Next.js compilation loops from spawning multiple concurrent TCP connections to Redis
-  if (!globalForWorker.bullWorker) {
-    globalForWorker.bullWorker = new Worker('document-processing', workerHandler, { connection });
+if (process.env.DISABLE_INLINE_WORKER !== 'true') {
+  if (process.env.NODE_ENV === 'production') {
+    worker = new Worker('document-processing', workerHandler, { connection });
+  } else {
+    // Prevent Next.js compilation loops from spawning multiple concurrent TCP connections to Redis
+    if (!globalForWorker.bullWorker) {
+      globalForWorker.bullWorker = new Worker('document-processing', workerHandler, { connection });
+    }
+    worker = globalForWorker.bullWorker;
   }
-  worker = globalForWorker.bullWorker;
 }
 
 export { worker };

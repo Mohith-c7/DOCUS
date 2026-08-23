@@ -1,0 +1,3 @@
+FORCE_FAIL: This document is designed to simulate an Al provider failure.
+
+FORCE_FAIL

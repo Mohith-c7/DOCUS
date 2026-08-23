@@ -1,0 +1,3 @@
+Dummy PDF file
+
+This is additional filler text to ensure the mock scanned PDF passes the 50-character usability threshold during automated integration testing.
