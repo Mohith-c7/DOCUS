@@ -1,0 +1,79 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum FileType {
+  PDF
+  IMAGE
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ProcessingStage {
+  UPLOADING
+  UPLOADED
+  EXTRACTING
+  OCR_PROCESSING
+  NORMALIZING
+  SUMMARIZING
+  COMPLETED
+  FAILED
+}
+
+enum ExtractionMethod {
+  NATIVE
+  OCR
+}
+
+enum SummaryLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+model Document {
+  id               String            @id @default(uuid())
+  originalFileName String
+  fileType         FileType
+  mimeType         String
+  fileSizeBytes    Int
+  storageKey       String
+  status           DocumentStatus    @default(UPLOADED)
+  currentStage     ProcessingStage   @default(UPLOADED)
+  extractionMethod ExtractionMethod?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  completedAt      DateTime?
+  failedAt         DateTime?
+
+  summaries        Summary[]
+
+  @@index([status])
+  @@index([currentStage])
+}
+
+model Summary {
+  id                String        @id @default(uuid())
+  documentId        String
+  document          Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  length            SummaryLength
+  title             String
+  summary           String
+  keyPoints         String[]
+  mainIdeas         String[]
+  processingVersion String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([documentId, length])
+  @@index([documentId])
+}
