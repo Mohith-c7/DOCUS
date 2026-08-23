@@ -4,8 +4,11 @@ import { PDFExtractionProvider } from './pdf-extraction-provider';
 import { OCRProvider } from './ocr-provider';
 import { GeminiSummarizationProvider } from './gemini-summarization-provider';
 
+const hasSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const hasSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
 export const storageProvider =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  hasSupabaseUrl && hasSupabaseKey
     ? new SupabaseStorageProvider()
     : new LocalStorageProvider();
 
