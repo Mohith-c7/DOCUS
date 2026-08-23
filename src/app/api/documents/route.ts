@@ -4,7 +4,7 @@ import { createDocument, updateDocumentStage } from '@/modules/documents/service
 import { DocumentUploadInitSchema } from '@/modules/validation/schemas';
 import { formatErrorResponse, AppError } from '@/modules/errors/api-error';
 import { storageProvider } from '@/modules/providers';
-import { processDocument } from '@/modules/processing/pipeline';
+import { addDocumentToQueue } from '@/modules/processing/queue';
 import { ProcessingStage, DocumentStatus } from '@prisma/client';
 
 export async function GET() {
@@ -89,10 +89,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Initiate native processing pipeline asynchronously in the background (no await)
-    processDocument(document.id).catch((err) => {
-      console.error(`Background processing failed for document ${document.id}:`, err);
-    });
+    // 3. Initiate native processing pipeline asynchronously in the background via BullMQ persistent queue
+    await addDocumentToQueue(document.id);
 
     // 4. Return 202 Accepted representing accepted for background processing
     return NextResponse.json({ document }, { status: 202 });
