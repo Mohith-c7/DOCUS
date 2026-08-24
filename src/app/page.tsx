@@ -66,8 +66,7 @@ export default function Home() {
   const [, setSummariesList] = useState<SummaryItem[]>([]);
   const [, setGeneratingAlternative] = useState(false);
 
-  // Stats & Share
-  const [stats, setStats] = useState<{ totalDocuments: number; totalSummaries: number }>({ totalDocuments: 0, totalSummaries: 0 });
+  // Share
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -81,6 +80,14 @@ export default function Home() {
   const retryCountRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Device Auto-Recognition
+  const [deviceData, setDeviceData] = useState<{
+    deviceRecognized: boolean;
+    ipAddress?: string;
+    documentsCount: number;
+    recentDocuments: Array<{ id: string; originalFileName: string; summaries?: Array<{ title: string; summary: string }> }>;
+  } | null>(null);
+
   useEffect(() => {
     let localAnonId = localStorage.getItem("docus_anon_session_id");
     if (!localAnonId) {
@@ -89,6 +96,24 @@ export default function Home() {
     }
     const anonId = localAnonId;
     setTimeout(() => setAnonymousSessionId(anonId), 0);
+
+    // Device IP & Session Handshake
+    fetch("/api/auth/device-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ anonymousSessionId: anonId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.anonymousSessionId) {
+          localStorage.setItem("docus_anon_session_id", data.anonymousSessionId);
+          setAnonymousSessionId(data.anonymousSessionId);
+        }
+        if (data.documentsCount > 0) {
+          setDeviceData(data);
+        }
+      })
+      .catch(() => {});
 
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user);
@@ -309,6 +334,64 @@ export default function Home() {
         {/* Upload Form */}
         {!docId && (
           <AnimatedContainer animation="fade-up" style={{ width: "100%", maxWidth: "560px" }}>
+            {/* Device Auto-Recognition Notification Banner */}
+            {deviceData && deviceData.documentsCount > 0 && (
+              <div style={{
+                marginBottom: "24px",
+                background: "#f4f5fd",
+                border: "1px solid #dcdfe6",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                display: "flex",
+                alignItems: "center",
+                justify: "space-between",
+                gap: "12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "6px",
+                    background: "var(--color-brand)", color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "14px", flexShrink: 0, fontWeight: 700,
+                  }}>
+                    ⚡
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-primary)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      Device Recognized
+                    </p>
+                    <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: 0 }}>
+                      {deviceData.documentsCount} saved summary available on this device
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                  {deviceData.recentDocuments[0] && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: "12px", padding: "5px 10px" }}
+                      onClick={() => {
+                        setDocId(deviceData.recentDocuments[0].id);
+                        fetchStatus(deviceData.recentDocuments[0].id);
+                      }}
+                    >
+                      View Recent →
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ fontSize: "12px", padding: "5px 8px" }}
+                    onClick={() => setIsPastSummariesOpen(true)}
+                  >
+                    History
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div style={{ textAlign: "center", marginBottom: "32px" }}>
               <h1 style={{ fontSize: "32px", fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.03em", marginBottom: "8px" }}>
                 Instant Document Summaries
@@ -380,11 +463,6 @@ export default function Home() {
                 {uploading ? "Uploading..." : "Generate Summary"}
               </button>
             </form>
-
-            {/* Live Stats */}
-            <div style={{ marginTop: "32px", textAlign: "center", fontSize: "12px", color: "var(--color-text-muted)" }}>
-              🔒 Encrypted Upload · ⚡ Fast Gemini 3.6 AI · {stats.totalDocuments > 0 ? `${stats.totalDocuments.toLocaleString()} documents summarized` : "Thousands of documents processed"}
-            </div>
           </AnimatedContainer>
         )}
 

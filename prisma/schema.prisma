@@ -57,6 +57,7 @@ model Document {
   status             DocumentStatus    @default(UPLOADED)
   currentStage       ProcessingStage   @default(UPLOADED)
   extractionMethod   ExtractionMethod?
+  ipAddress          String?
   // Premium fields
   shareId            String?           @unique
   userTitle          String?           // user-editable title override
@@ -73,6 +74,7 @@ model Document {
   @@index([currentStage])
   @@index([userId])
   @@index([anonymousSessionId])
+  @@index([ipAddress])
   @@index([shareId])
 }
 
@@ -141,4 +143,17 @@ model QAMessage {
   createdAt DateTime    @default(now())
 
   @@index([sessionId])
+}
+
+model DeviceSession {
+  id                 String   @id @default(uuid())
+  anonymousSessionId String   @unique
+  ipAddress          String?
+  userAgent          String?
+  userId             String?
+  lastActiveAt       DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  @@index([ipAddress])
+  @@index([userId])
 }

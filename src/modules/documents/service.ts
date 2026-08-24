@@ -10,6 +10,7 @@ export interface CreateDocumentInput {
   fileSizeBytes: number;
   userId?: string;
   anonymousSessionId?: string;
+  ipAddress?: string;
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<Document> {
@@ -25,6 +26,7 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
       storageKey,
       userId: input.userId || null,
       anonymousSessionId: input.anonymousSessionId || null,
+      ipAddress: input.ipAddress || null,
       status: DocumentStatus.UPLOADED,
       currentStage: ProcessingStage.UPLOADED,
     },

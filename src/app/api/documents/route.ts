@@ -16,11 +16,16 @@ export async function GET(request: NextRequest) {
     const collectionId = searchParams.get('collectionId');
     const status = searchParams.get('status');
 
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || undefined;
+
     const whereClause: Prisma.DocumentWhereInput = {};
     if (userId) {
       whereClause.userId = userId;
     } else if (anonymousSessionId) {
       whereClause.anonymousSessionId = anonymousSessionId;
+    } else if (clientIp) {
+      // Auto device IP fallback
+      whereClause.ipAddress = clientIp;
     }
 
     // Search filter on file name
@@ -128,6 +133,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || undefined;
+
     // 1. Create Document Database entry (status: UPLOADED, stage: UPLOADED)
     const document = await createDocument({
       fileName,
@@ -135,6 +142,7 @@ export async function POST(request: NextRequest) {
       fileSizeBytes,
       userId,
       anonymousSessionId,
+      ipAddress: clientIp,
     });
 
     // 2. Upload Binary file to Storage Provider
