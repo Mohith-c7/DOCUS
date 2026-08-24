@@ -17,16 +17,6 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
   const fileType = getFileTypeFromMime(input.mimeType);
   const storageKey = `uploads/${crypto.randomUUID()}-${input.fileName}`;
 
-  let validUserId: string | null = null;
-  if (input.userId) {
-    try {
-      const userExists = await db.user.findUnique({ where: { id: input.userId } });
-      if (userExists) validUserId = input.userId;
-    } catch {
-      validUserId = null;
-    }
-  }
-
   return db.document.create({
     data: {
       originalFileName: input.fileName,
@@ -34,7 +24,7 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
       mimeType: input.mimeType,
       fileSizeBytes: input.fileSizeBytes,
       storageKey,
-      userId: validUserId,
+      userId: input.userId || null,
       anonymousSessionId: input.anonymousSessionId || null,
       ipAddress: input.ipAddress || null,
       status: DocumentStatus.UPLOADED,
