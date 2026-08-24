@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { DocumentCard } from "@/components/dashboard/DocumentCard";
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -59,27 +60,37 @@ export default function DashboardPage() {
   // Fetch data
   useEffect(() => {
     if (!user) return;
+    let isSubscribed = true;
 
     // Fetch Stats
     fetch("/api/stats")
       .then((res) => res.json())
-      .then((data) => setStats(data))
+      .then((data) => {
+        if (isSubscribed) setStats(data);
+      })
       .catch(() => {});
 
     // Fetch Collections
-    setLoadingCols(true);
     fetch(`/api/collections?userId=${user.id}`)
       .then((res) => res.json())
-      .then((data) => setCollections(data.collections || []))
+      .then((data) => {
+        if (isSubscribed) setCollections(data.collections || []);
+      })
       .catch(() => toast.error("Failed to load collections"))
-      .finally(() => setLoadingCols(false));
+      .finally(() => {
+        if (isSubscribed) setLoadingCols(false);
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [user, toast]);
 
   // Fetch Documents when user or activeCollection changes
   useEffect(() => {
     if (!user) return;
+    let isSubscribed = true;
 
-    setLoadingDocs(true);
     let url = `/api/documents?userId=${user.id}`;
     if (activeCollection) {
       url += `&collectionId=${activeCollection}`;
@@ -87,12 +98,21 @@ export default function DashboardPage() {
 
     fetch(url)
       .then((res) => res.json())
-      .then((data) => setDocuments(data.documents || []))
+      .then((data) => {
+        if (isSubscribed) setDocuments(data.documents || []);
+      })
       .catch(() => toast.error("Failed to load documents"))
-      .finally(() => setLoadingDocs(false));
+      .finally(() => {
+        if (isSubscribed) setLoadingDocs(false);
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [user, activeCollection, toast]);
 
   const handleCreateCollection = async () => {
+    if (!user) return;
     const name = prompt("Enter collection name:");
     if (!name || !name.trim()) return;
 
@@ -196,7 +216,7 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{user.email}</span>
+          <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{user?.email}</span>
           <button className="btn btn-primary" style={{ fontSize: "13px", padding: "6px 14px" }} onClick={() => router.push("/")}>
             + Upload New
           </button>

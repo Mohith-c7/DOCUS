@@ -47,28 +47,30 @@ export function PastSummariesModal({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchPastDocuments = async () => {
-    setLoading(true);
-    try {
-      const param = userId
-        ? `userId=${userId}`
-        : anonymousSessionId
-        ? `anonymousSessionId=${anonymousSessionId}`
-        : '';
-      const res = await fetch(`/api/documents?${param}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDocuments(data.documents || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch past documents:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (isOpen) fetchPastDocuments();
+    if (!isOpen) return;
+    let isSubscribed = true;
+    const fetchPastDocuments = async () => {
+      setLoading(true);
+      try {
+        const param = userId
+          ? `userId=${userId}`
+          : anonymousSessionId
+          ? `anonymousSessionId=${anonymousSessionId}`
+          : '';
+        const res = await fetch(`/api/documents?${param}`);
+        if (res.ok && isSubscribed) {
+          const data = await res.json();
+          setDocuments(data.documents || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch past documents:', err);
+      } finally {
+        if (isSubscribed) setLoading(false);
+      }
+    };
+    fetchPastDocuments();
+    return () => { isSubscribed = false; };
   }, [isOpen, userId, anonymousSessionId]);
 
   if (!isOpen) return null;

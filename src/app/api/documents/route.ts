@@ -5,7 +5,7 @@ import { DocumentUploadInitSchema } from '@/modules/validation/schemas';
 import { formatErrorResponse, AppError } from '@/modules/errors/api-error';
 import { storageProvider } from '@/modules/providers';
 import { addDocumentToQueue } from '@/modules/processing/queue';
-import { ProcessingStage, DocumentStatus } from '@prisma/client';
+import { ProcessingStage, DocumentStatus, Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const collectionId = searchParams.get('collectionId');
     const status = searchParams.get('status');
 
-    const whereClause: any = {};
+    const whereClause: Prisma.DocumentWhereInput = {};
     if (userId) {
       whereClause.userId = userId;
     } else if (anonymousSessionId) {

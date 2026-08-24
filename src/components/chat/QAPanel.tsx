@@ -23,6 +23,7 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
   const [currentStreamToken, setCurrentStreamToken] = useState("");
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const accumulatedTextRef = useRef("");
 
   // Fetch initial history
   useEffect(() => {
@@ -52,6 +53,7 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
     setMessages((prev) => [...prev, { role: "USER", content: userMessageText }]);
     setStreaming(true);
     setCurrentStreamToken("");
+    accumulatedTextRef.current = "";
 
     try {
       const res = await fetch(`/api/documents/${documentId}/qa/stream`, {
@@ -64,7 +66,6 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let fullText = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -80,10 +81,10 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
               if (data.type === "session") {
                 setSessionId(data.sessionId);
               } else if (data.type === "token") {
-                fullText += data.token;
-                setCurrentStreamToken(fullText);
+                accumulatedTextRef.current += String(data.token);
+                setCurrentStreamToken(accumulatedTextRef.current);
               } else if (data.type === "done") {
-                setMessages((prev) => [...prev, { role: "ASSISTANT", content: fullText }]);
+                setMessages((prev) => [...prev, { role: "ASSISTANT", content: accumulatedTextRef.current }]);
                 setCurrentStreamToken("");
               } else if (data.type === "error") {
                 setMessages((prev) => [...prev, { role: "ASSISTANT", content: `Error: ${data.message}` }]);
@@ -114,7 +115,7 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
       {/* Header */}
       <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
-          💬 Document Q&A
+          💬 {documentTitle ? `Q&A · ${documentTitle}` : 'Document Q&A'}
         </h3>
         <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Ask questions in real-time</span>
       </div>

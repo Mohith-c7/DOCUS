@@ -29,7 +29,7 @@ export default function DocumentDetailPage() {
   const { toast } = useToast();
   const id = params.id as string;
 
-  const [documentMeta, setDocumentMeta] = useState<any>(null);
+  const [documentMeta, setDocumentMeta] = useState<Record<string, unknown> | null>(null);
   const [summaries, setSummaries] = useState<SummaryItem[]>([]);
   const [activeSummary, setActiveSummary] = useState<SummaryItem | null>(null);
   const [summaryLength, setSummaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
@@ -127,7 +127,7 @@ export default function DocumentDetailPage() {
             ← Back
           </button>
           <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {activeSummary?.title || "Document Details"}
+            {activeSummary?.title || (documentMeta?.originalFileName as string) || "Document Details"}
           </span>
         </div>
 

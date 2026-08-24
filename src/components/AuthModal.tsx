@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: any) => void;
+  onSuccess: (user: unknown) => void;
   anonymousSessionId?: string;
   defaultMode?: 'login' | 'signup';
 }
@@ -55,8 +55,8 @@ export function AuthModal({ isOpen, onClose, onSuccess, anonymousSessionId, defa
           onClose();
         }
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { exportSummaryToPdf } from "@/lib/pdf-export";
 import { AuthModal } from "@/components/AuthModal";
@@ -26,8 +27,6 @@ const STAGE_LABELS: Record<string, string> = {
   FAILED: "Document processing failed.",
 };
 
-const STAGE_STEPS = ["UPLOADED", "EXTRACTING", "OCR_PROCESSING", "NORMALIZING", "SUMMARIZING", "COMPLETED"];
-
 interface SummaryItem {
   id: string;
   documentId: string;
@@ -44,7 +43,7 @@ export default function Home() {
   const { toast } = useToast();
 
   // User Auth & Session States
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [anonymousSessionId, setAnonymousSessionId] = useState<string>("");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPastSummariesOpen, setIsPastSummariesOpen] = useState(false);
@@ -52,7 +51,7 @@ export default function Home() {
 
   // Input State
   const [file, setFile] = useState<File | null>(null);
-  const [summaryLength, setSummaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
+  const [summaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
   const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>("general");
   const [summaryLanguage, setSummaryLanguage] = useState<SupportedLanguage>("en");
 
@@ -64,17 +63,13 @@ export default function Home() {
   const [docId, setDocId] = useState<string | null>(null);
   const [docStage, setDocStage] = useState<string | null>(null);
   const [activeSummary, setActiveSummary] = useState<SummaryItem | null>(null);
-  const [summariesList, setSummariesList] = useState<SummaryItem[]>([]);
-  const [generatingAlternative, setGeneratingAlternative] = useState(false);
 
   // Stats & Share
   const [stats, setStats] = useState<{ totalDocuments: number; totalSummaries: number }>({ totalDocuments: 0, totalSummaries: 0 });
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Errors & Drag UI
-  const [error, setError] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  // Drag UI
   const [isDragOver, setIsDragOver] = useState(false);
 
   // References
@@ -88,7 +83,8 @@ export default function Home() {
       localAnonId = crypto.randomUUID();
       localStorage.setItem("docus_anon_session_id", localAnonId);
     }
-    setAnonymousSessionId(localAnonId);
+    const anonId = localAnonId;
+    setTimeout(() => setAnonymousSessionId(anonId), 0);
 
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user);
@@ -154,12 +150,11 @@ export default function Home() {
       if (!response.ok) throw new Error("Failed to load summaries list.");
       const data = await response.json();
       const list = data.summaries || [];
-      setSummariesList(list);
       const match = list.find((s: SummaryItem) => s.length === selectLength);
       if (match) { setActiveSummary(match); }
       else { generateAlternateSummary(id, selectLength); }
     } catch {
-      setError("Failed to retrieve document summaries.");
+      toast.error("Failed to retrieve document summaries.");
     }
   };
 
@@ -265,8 +260,6 @@ export default function Home() {
       toast.error("Failed to generate share link");
     }
   };
-
-  const currentStageIndex = STAGE_STEPS.indexOf(docStage || "UPLOADED");
 
   return (
     <main style={{ minHeight: "100vh", background: "var(--color-surface-secondary)", display: "flex", flexDirection: "column" }}>
@@ -411,7 +404,22 @@ export default function Home() {
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button className="btn btn-secondary" style={{ fontSize: "12px" }} onClick={handleShare}>🔗 Share</button>
                   <button className="btn btn-secondary" style={{ fontSize: "12px" }} onClick={() => handleCopyText(activeSummary.summary)}>Copy</button>
-                  <button className="btn btn-primary" style={{ fontSize: "12px" }} onClick={() => exportSummaryToPdf(activeSummary as any)}>Export PDF</button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: "12px" }}
+                    onClick={() =>
+                      exportSummaryToPdf({
+                        title: activeSummary.title,
+                        summary: activeSummary.summary,
+                        keyPoints: activeSummary.keyPoints,
+                        mainIdeas: activeSummary.mainIdeas,
+                        length: activeSummary.length,
+                        originalFileName: file?.name,
+                      })
+                    }
+                  >
+                    Export PDF
+                  </button>
                   {user && (
                     <a href={`/documents/${docId}`} className="btn btn-secondary" style={{ fontSize: "12px" }}>
                       Chat Q&A →
