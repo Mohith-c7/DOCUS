@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20.18.0"
+  NEXT_USE_NETLIFY_EDGE = "false"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["tesseract.js", "pdf-to-png-converter", "@aws-sdk/client-textract", "pg", "@prisma/client"]
