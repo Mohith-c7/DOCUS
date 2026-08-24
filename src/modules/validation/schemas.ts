@@ -10,6 +10,54 @@ export const SUPPORTED_MIME_TYPES = [
 
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
 
+export const SUMMARY_TEMPLATES = [
+  'general',
+  'legal',
+  'medical',
+  'academic',
+  'technical',
+  'financial',
+] as const;
+
+export const SUPPORTED_LANGUAGES = [
+  'en',   // English
+  'es',   // Spanish
+  'fr',   // French
+  'de',   // German
+  'hi',   // Hindi
+  'pt',   // Portuguese
+] as const;
+
+export type SummaryTemplate = typeof SUMMARY_TEMPLATES[number];
+export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
+
+export const TEMPLATE_LABELS: Record<SummaryTemplate, string> = {
+  general: 'General',
+  legal: 'Legal',
+  medical: 'Medical',
+  academic: 'Academic',
+  technical: 'Technical',
+  financial: 'Financial',
+};
+
+export const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
+  en: '🇺🇸 English',
+  es: '🇪🇸 Spanish',
+  fr: '🇫🇷 French',
+  de: '🇩🇪 German',
+  hi: '🇮🇳 Hindi',
+  pt: '🇧🇷 Portuguese',
+};
+
+export const TEMPLATE_SYSTEM_PROMPTS: Record<SummaryTemplate, string> = {
+  general: '',
+  legal: `Focus on: legal obligations, parties involved, key clauses, risks, deadlines, and liability terms. Use precise legal language. Highlight any unusual or potentially unfavorable terms.`,
+  medical: `Focus on: diagnosis, treatment plans, medications, dosages, contraindications, clinical findings, and patient outcomes. Use medical terminology appropriately. Note any critical health information.`,
+  academic: `Focus on: research objectives, methodology, key findings, conclusions, limitations, and academic contributions. Preserve technical terminology. Note citations of importance.`,
+  technical: `Focus on: system architecture, technical specifications, APIs, data flows, algorithms, and implementation details. Use precise technical language. Highlight dependencies and constraints.`,
+  financial: `Focus on: revenue, costs, profit/loss, key financial metrics, risks, forecasts, and investment implications. Use financial terminology. Highlight any red flags or notable trends.`,
+};
+
 export const DocumentUploadInitSchema = z.object({
   fileName: z.string().min(1, 'File name is required').max(255, 'File name is too long'),
   mimeType: z.enum(SUPPORTED_MIME_TYPES, {
@@ -25,7 +73,9 @@ export const DocumentUploadInitSchema = z.object({
 export const SummaryRequestSchema = z.object({
   length: z.nativeEnum(SummaryLength, {
     message: 'Invalid summary length configuration.'
-  })
+  }),
+  template: z.enum(SUMMARY_TEMPLATES).optional().default('general'),
+  language: z.enum(SUPPORTED_LANGUAGES).optional().default('en'),
 });
 
 export const StructuredSummarySchema = z.object({

@@ -27,5 +27,5 @@ export interface SummaryResult {
 }
 
 export interface SummarizationProvider {
-  summarize(content: string, length: 'SHORT' | 'MEDIUM' | 'LONG'): Promise<SummaryResult>;
+  summarize(content: string, length: 'SHORT' | 'MEDIUM' | 'LONG', template?: string, language?: string): Promise<SummaryResult>;
 }

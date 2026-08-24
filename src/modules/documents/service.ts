@@ -8,6 +8,8 @@ export interface CreateDocumentInput {
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
+  userId?: string;
+  anonymousSessionId?: string;
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<Document> {
@@ -21,6 +23,8 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
       mimeType: input.mimeType,
       fileSizeBytes: input.fileSizeBytes,
       storageKey,
+      userId: input.userId || null,
+      anonymousSessionId: input.anonymousSessionId || null,
       status: DocumentStatus.UPLOADED,
       currentStage: ProcessingStage.UPLOADED,
     },

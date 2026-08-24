@@ -14,4 +14,5 @@ export const storageProvider =
 
 export const pdfExtractionProvider = new PDFExtractionProvider(storageProvider);
 export const ocrProvider = new OCRProvider(storageProvider);
-export const summarizationProvider = new GeminiSummarizationProvider();
+// Factory function to create a fresh GeminiSummarizationProvider instance per request
+export const getSummarizationProvider = () => new GeminiSummarizationProvider();

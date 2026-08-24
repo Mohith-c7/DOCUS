@@ -1,17 +1,32 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabase";
+import { exportSummaryToPdf } from "@/lib/pdf-export";
+import { AuthModal } from "@/components/AuthModal";
+import { PastSummariesModal } from "@/components/PastSummariesModal";
+import { useToast } from "@/components/ui/Toast";
+import { AnimatedContainer } from "@/components/ui/AnimatedContainer";
+import {
+  TEMPLATE_LABELS,
+  LANGUAGE_LABELS,
+  SUMMARY_TEMPLATES,
+  SUPPORTED_LANGUAGES,
+  SummaryTemplate,
+  SupportedLanguage,
+} from "@/modules/validation/schemas";
 
-// Stage mapping to human readable status messages
 const STAGE_LABELS: Record<string, string> = {
   UPLOADED: "Preparing document and verifying files...",
   EXTRACTING: "Extracting text using native parser...",
-  OCR_PROCESSING: "Running OCR engine on scanned blocks...",
+  OCR_PROCESSING: "Running OCR on scanned document blocks...",
   NORMALIZING: "Formatting and structure cleanup...",
-  SUMMARIZING: "Running AI summarization engine...",
+  SUMMARIZING: "Generating AI summary with Gemini...",
   COMPLETED: "Summary generation complete!",
   FAILED: "Document processing failed.",
 };
+
+const STAGE_STEPS = ["UPLOADED", "EXTRACTING", "OCR_PROCESSING", "NORMALIZING", "SUMMARIZING", "COMPLETED"];
 
 interface SummaryItem {
   id: string;
@@ -26,14 +41,25 @@ interface SummaryItem {
 }
 
 export default function Home() {
+  const { toast } = useToast();
+
+  // User Auth & Session States
+  const [user, setUser] = useState<any | null>(null);
+  const [anonymousSessionId, setAnonymousSessionId] = useState<string>("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isPastSummariesOpen, setIsPastSummariesOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("signup");
+
   // Input State
   const [file, setFile] = useState<File | null>(null);
   const [summaryLength, setSummaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
-  
+  const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>("general");
+  const [summaryLanguage, setSummaryLanguage] = useState<SupportedLanguage>("en");
+
   // Processing States
   const [uploading, setUploading] = useState(false);
   const [polling, setPolling] = useState(false);
-  
+
   // Document context
   const [docId, setDocId] = useState<string | null>(null);
   const [docStage, setDocStage] = useState<string | null>(null);
@@ -41,599 +67,401 @@ export default function Home() {
   const [summariesList, setSummariesList] = useState<SummaryItem[]>([]);
   const [generatingAlternative, setGeneratingAlternative] = useState(false);
 
-  // Errors
+  // Stats & Share
+  const [stats, setStats] = useState<{ totalDocuments: number; totalSummaries: number }>({ totalDocuments: 0, totalSummaries: 0 });
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  // Errors & Drag UI
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  // Interaction UI
   const [isDragOver, setIsDragOver] = useState(false);
-  
+
+  // References
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Helper to update the browser URL search parameters
-  const updateUrlParams = (id: string | null) => {
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      if (id) {
-        url.searchParams.set("docId", id);
-      } else {
-        url.searchParams.delete("docId");
-      }
-      window.history.pushState({}, "", url.toString());
+  useEffect(() => {
+    let localAnonId = localStorage.getItem("docus_anon_session_id");
+    if (!localAnonId) {
+      localAnonId = crypto.randomUUID();
+      localStorage.setItem("docus_anon_session_id", localAnonId);
     }
+    setAnonymousSessionId(localAnonId);
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setUser(data.user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Fetch stats
+    fetch("/api/stats")
+      .then((res) => res.json())
+      .then((data) => setStats(data))
+      .catch(() => {});
+
+    return () => { authListener.subscription.unsubscribe(); };
+  }, []);
+
+  const updateUrlParams = (id: string | null) => {
+    const url = new URL(window.location.href);
+    if (id) { url.searchParams.set("docId", id); }
+    else { url.searchParams.delete("docId"); }
+    window.history.replaceState({}, "", url.toString());
   };
 
-  // Generate an alternative summary length
-  const generateAlternateSummary = async (id: string, length: "SHORT" | "MEDIUM" | "LONG") => {
+  const generateAlternateSummary = async (
+    id: string,
+    targetLength: "SHORT" | "MEDIUM" | "LONG",
+    targetTemplate: SummaryTemplate = summaryTemplate,
+    targetLanguage: SupportedLanguage = summaryLanguage
+  ) => {
     setGeneratingAlternative(true);
     setError(null);
     try {
       const response = await fetch(`/api/documents/${id}/summaries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ length }),
+        body: JSON.stringify({ length: targetLength, template: targetTemplate, language: targetLanguage }),
       });
-
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.message || "Failed to generate summary.");
+        throw new Error(errJson.message || `Failed to generate ${targetLength} summary.`);
       }
-
       const data = await response.json();
       const newSummary = data.summary;
-
       setSummariesList((prev) => {
-        // Ensure no duplicates in state list
-        const filtered = prev.filter((s) => s.length !== length);
+        const filtered = prev.filter((s) => s.length !== targetLength);
         return [...filtered, newSummary];
       });
       setActiveSummary(newSummary);
+      toast.success("Summary updated!");
     } catch (err) {
-      console.error(err);
-      setError(`Failed to generate ${length.toLowerCase()} summary: ${(err as Error).message}`);
+      setError((err as Error).message || "Failed to generate alternative summary.");
+      toast.error("Failed to update summary.");
     } finally {
       setGeneratingAlternative(false);
     }
   };
 
-  // Fetch summaries list for completed document
   const fetchSummaries = async (id: string, selectLength: "SHORT" | "MEDIUM" | "LONG") => {
     try {
       const response = await fetch(`/api/documents/${id}/summaries`);
-      if (!response.ok) {
-        throw new Error("Failed to load summaries list.");
-      }
+      if (!response.ok) throw new Error("Failed to load summaries list.");
       const data = await response.json();
       const list = data.summaries || [];
       setSummariesList(list);
-
-      // Find summary matching length
       const match = list.find((s: SummaryItem) => s.length === selectLength);
-      if (match) {
-        setActiveSummary(match);
-      } else {
-        // If not found (e.g. on page refresh if we want a length other than MEDIUM), request generation
-        generateAlternateSummary(id, selectLength);
-      }
-    } catch (err) {
-      console.error(err);
+      if (match) { setActiveSummary(match); }
+      else { generateAlternateSummary(id, selectLength); }
+    } catch {
       setError("Failed to retrieve document summaries.");
     }
   };
 
-  // Poll status endpoint
   const fetchStatus = async (id: string) => {
     try {
       const response = await fetch(`/api/documents/${id}/status`);
-      if (!response.ok) {
-        throw new Error(`Server returned status check error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Server returned status check error: ${response.status}`);
       const statusData = await response.json();
       setDocStage(statusData.currentStage);
-      retryCountRef.current = 0; // Reset network errors count
-
+      retryCountRef.current = 0;
       if (statusData.status === "COMPLETED") {
         setPolling(false);
-        // Load generated summaries list
         fetchSummaries(id, summaryLength);
       } else if (statusData.status === "FAILED") {
         setPolling(false);
-        setError("Document processing failed during the background pipeline. Please try uploading another document.");
+        setError("Document processing failed during background processing.");
       } else {
-        // Keep polling
         pollingTimerRef.current = setTimeout(() => fetchStatus(id), 1500);
       }
-    } catch (err) {
-      console.error("Polling error:", err);
+    } catch {
       retryCountRef.current += 1;
-      
       if (retryCountRef.current > 5) {
         setPolling(false);
-        setError("Lost connection to processing server. Please refresh the page to try retrieving the document.");
+        setError("Connection lost. Please refresh the page.");
       } else {
-        // Retry polling soon
         pollingTimerRef.current = setTimeout(() => fetchStatus(id), 2500);
       }
     }
   };
 
-  // Clean polling on unmount
   useEffect(() => {
-    return () => {
-      if (pollingTimerRef.current) {
-        clearTimeout(pollingTimerRef.current);
-      }
-    };
+    return () => { if (pollingTimerRef.current) clearTimeout(pollingTimerRef.current); };
   }, []);
 
-  // Sync state with URL parameter for page refresh resiliency
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlDocId = params.get("docId");
-    
-    if (urlDocId && urlDocId !== docId) {
-      // Async state update using setTimeout to prevent synchronous cascading renders inside effect
-      setTimeout(() => {
-        setDocId(urlDocId);
-        setPolling(true);
-        setError(null);
-        retryCountRef.current = 0;
-        fetchStatus(urlDocId);
-      }, 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // File selection validation
   const validateFile = (selectedFile: File) => {
     setValidationError(null);
-
-    const allowedMimeTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+    const allowedMimeTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp"];
     if (!allowedMimeTypes.includes(selectedFile.type)) {
-      setValidationError("Unsupported file format. Please select a PDF or an Image (.png, .jpeg, .jpg).");
+      setValidationError("Unsupported format. Please upload a PDF or image file (.png, .jpeg, .jpg, .webp).");
       return false;
     }
-
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (selectedFile.size > maxSize) {
-      setValidationError("File is too large. Maximum supported size is 10MB.");
+    if (selectedFile.size > 50 * 1024 * 1024) {
+      setValidationError("File is too large. Maximum supported size is 50 MB.");
       return false;
     }
-
-    if (selectedFile.size === 0) {
-      setValidationError("The selected file is empty. Please select a valid document.");
-      return false;
-    }
-
     return true;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
-      if (validateFile(selected)) {
-        setFile(selected);
-      }
+      if (validateFile(selected)) setFile(selected);
     }
   };
 
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const selected = e.dataTransfer.files[0];
-      if (validateFile(selected)) {
-        setFile(selected);
-      }
-    }
-  };
-
-  // Upload handler
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
-
     setUploading(true);
     setError(null);
     setValidationError(null);
 
     const formData = new FormData();
     formData.append("file", file);
+    if (anonymousSessionId) formData.append("anonymousSessionId", anonymousSessionId);
+    if (user?.id) formData.append("userId", user.id);
 
     try {
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
-
+      const response = await fetch("/api/documents", { method: "POST", body: formData });
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.message || "Failed to upload file to processing pipeline.");
+        throw new Error(errJson.message || "Failed to upload file.");
       }
-
       const data = await response.json();
       const id = data.document.id;
-      
       setDocId(id);
       updateUrlParams(id);
       setDocStage(data.document.currentStage);
       setUploading(false);
       setPolling(true);
-      
-      // Start polling status
       fetchStatus(id);
     } catch (err) {
-      console.error(err);
-      setError((err as Error).message || "An unexpected error occurred during upload.");
+      setError((err as Error).message || "Upload error.");
       setUploading(false);
     }
   };
 
-  // Alternate length request click handler
-  const handleLengthSwitch = (length: "SHORT" | "MEDIUM" | "LONG") => {
-    if (!docId || generatingAlternative) return;
-    setSummaryLength(length);
+  const handleCopyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
 
-    const match = summariesList.find((s) => s.length === length);
-    if (match) {
-      setActiveSummary(match);
-    } else {
-      generateAlternateSummary(docId, length);
+  const handleShare = async () => {
+    if (!docId) return;
+    try {
+      const res = await fetch(`/api/documents/${docId}/share`, { method: "POST" });
+      const data = await res.json();
+      if (data.shareId) {
+        setShareUrl(`${window.location.origin}/s/${data.shareId}`);
+        setShowShareModal(true);
+      }
+    } catch {
+      toast.error("Failed to generate share link");
     }
   };
 
-  // Reset to initial state for new uploads
-  const handleUploadAnother = () => {
-    if (pollingTimerRef.current) {
-      clearTimeout(pollingTimerRef.current);
-    }
-    setFile(null);
-    setDocId(null);
-    setDocStage(null);
-    setActiveSummary(null);
-    setSummariesList([]);
-    setPolling(false);
-    setUploading(false);
-    setGeneratingAlternative(false);
-    setError(null);
-    setValidationError(null);
-    updateUrlParams(null);
-  };
+  const currentStageIndex = STAGE_STEPS.indexOf(docStage || "UPLOADED");
 
   return (
-    <div className="flex flex-col flex-1 min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Header Bar */}
-      <header className="border-b border-slate-200 bg-white shadow-xs py-4 px-6 sm:px-12 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-            D
+    <main style={{ minHeight: "100vh", background: "var(--color-surface-secondary)", display: "flex", flexDirection: "column" }}>
+      {/* Header */}
+      <header style={{
+        position: "sticky", top: 0, zIndex: 40,
+        background: "rgba(255,255,255,0.9)", backdropFilter: "blur(12px)",
+        borderBottom: "1px solid var(--color-border)",
+        padding: "0 24px", height: "60px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ width: "32px", height: "32px", background: "var(--color-brand)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">DocuSum</h1>
-            <p className="text-xs text-slate-500 font-medium">AI Document Summary Assistant</p>
-          </div>
+          <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text-primary)" }}>Docus AI</span>
         </div>
-        <div className="text-xs text-slate-400 font-mono hidden sm:block">
-          Pipeline v1.0
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {user && (
+            <a href="/dashboard" className="btn btn-ghost" style={{ fontSize: "13px", padding: "7px 13px" }}>
+              Dashboard
+            </a>
+          )}
+          <button className="btn btn-ghost" onClick={() => setIsPastSummariesOpen(true)} style={{ fontSize: "13px", padding: "7px 13px" }}>
+            Past Summaries
+          </button>
+
+          {user ? (
+            <button className="btn btn-secondary" onClick={() => supabase.auth.signOut().then(() => setUser(null))} style={{ fontSize: "13px", padding: "7px 13px" }}>
+              Sign out
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => { setAuthModalMode("signup"); setIsAuthModalOpen(true); }} style={{ fontSize: "13px", padding: "7px 14px" }}>
+              Create account
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main Workspace */}
-      <main className="flex flex-col flex-1 items-center justify-center py-10 px-6 sm:px-12 max-w-5xl w-full mx-auto">
-        {error && (
-          <div className="mb-6 w-full p-4 border-l-4 border-red-500 bg-red-50 rounded-r-md text-red-800 text-sm shadow-xs flex justify-between items-start gap-4">
-            <div>
-              <h4 className="font-semibold text-red-900">Error Encountered</h4>
-              <p className="mt-1 font-medium">{error}</p>
+      {/* Main Content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px" }}>
+        {/* Upload Form */}
+        {!docId && (
+          <AnimatedContainer animation="fade-up" style={{ width: "100%", maxWidth: "560px" }}>
+            <div style={{ textAlign: "center", marginBottom: "32px" }}>
+              <h1 style={{ fontSize: "32px", fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.03em", marginBottom: "8px" }}>
+                Instant Document Summaries
+              </h1>
+              <p style={{ fontSize: "14px", color: "var(--color-text-secondary)" }}>
+                Upload any document to get a structured AI summary in seconds.
+              </p>
             </div>
-            <button
-              onClick={handleUploadAnother}
-              className="text-xs font-bold text-red-700 hover:text-red-900 underline uppercase tracking-wider shrink-0"
-            >
-              Upload Another
-            </button>
-          </div>
-        )}
 
-        {/* UPLOAD SCREEN */}
-        {!docId && !uploading && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs w-full max-w-2xl p-6 sm:p-10">
-            <h2 className="text-2xl font-bold text-slate-800 tracking-tight text-center">
-              Generate Structured Summaries
-            </h2>
-            <p className="text-sm text-slate-500 text-center mt-1 mb-8 max-w-md mx-auto">
-              Upload a digital PDF, scanned document, or text image. Our intelligence pipeline handles layout extraction, OCR routing, and structures the summary.
-            </p>
-
-            <form onSubmit={handleUploadSubmit} className="space-y-6">
+            <form onSubmit={handleUploadSubmit}>
               {/* Dropzone */}
               <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("file-input")?.click()}
-                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${
-                  isDragOver
-                    ? "border-indigo-600 bg-indigo-50/50"
-                    : "border-slate-300 hover:border-slate-400 bg-slate-50/50"
-                }`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
+                onDrop={(e) => {
+                  e.preventDefault(); setIsDragOver(false);
+                  if (e.dataTransfer.files?.[0] && validateFile(e.dataTransfer.files[0])) setFile(e.dataTransfer.files[0]);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${isDragOver ? "var(--color-brand)" : file ? "var(--color-success)" : "var(--color-border-strong)"}`,
+                  borderRadius: "8px", padding: "32px 24px", textAlign: "center", cursor: "pointer",
+                  background: file ? "var(--color-success-bg)" : "white", marginBottom: "20px",
+                }}
               >
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                
-                {/* SVG Icon */}
-                <svg
-                  className="w-12 h-12 text-slate-400 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
-                  ></path>
-                </svg>
-
+                <input ref={fileInputRef} type="file" accept=".pdf,image/png,image/jpeg,image/jpg,image/webp" onChange={handleFileChange} style={{ display: "none" }} />
                 {file ? (
-                  <div className="text-center">
-                    <p className="font-semibold text-slate-800 text-sm max-w-xs truncate mx-auto">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type.split("/")[1].toUpperCase()}
-                    </p>
-                  </div>
+                  <p style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{file.name}</p>
                 ) : (
-                  <div className="text-center">
-                    <p className="font-semibold text-slate-700 text-sm">
-                      Drag & drop your file here, or click to browse
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Supports PDF, PNG, JPG, JPEG (up to 10MB)
-                    </p>
-                  </div>
+                  <p style={{ fontSize: "14px", color: "var(--color-text-secondary)" }}>Drop PDF or image here, or click to browse</p>
                 )}
               </div>
 
-              {validationError && (
-                <div className="p-3 bg-amber-50 text-amber-800 text-xs border border-amber-200 rounded-md font-medium text-center">
-                  {validationError}
-                </div>
-              )}
-
-              {/* Summary Length Selector */}
-              <div className="space-y-3">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Select Summary Detail Level
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    { id: "SHORT", title: "Short", desc: "1-2 sentence overview and key points." },
-                    { id: "MEDIUM", title: "Medium", desc: "Paragraph summary with core themes." },
-                    { id: "LONG", title: "Long", desc: "Detailed summary and deep concept lists." },
-                  ].map((opt) => (
+              {/* Template selection */}
+              <div style={{ marginBottom: "16px" }}>
+                <label className="form-label">Summary Style / Domain</label>
+                <div className="option-grid">
+                  {SUMMARY_TEMPLATES.map((t) => (
                     <button
-                      key={opt.id}
+                      key={t}
                       type="button"
-                      onClick={() => setSummaryLength(opt.id as "SHORT" | "MEDIUM" | "LONG")}
-                      className={`p-3 border text-left rounded-lg transition-all ${
-                        summaryLength === opt.id
-                          ? "border-indigo-600 bg-indigo-50/20 ring-2 ring-indigo-500/20"
-                          : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
+                      className={`option-chip ${summaryTemplate === t ? "selected" : ""}`}
+                      onClick={() => setSummaryTemplate(t)}
                     >
-                      <h4 className="font-bold text-slate-800 text-sm">{opt.title}</h4>
-                      <p className="text-xs text-slate-500 mt-1 leading-snug">{opt.desc}</p>
+                      {TEMPLATE_LABELS[t]}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={!file}
-                className={`w-full py-3 rounded-lg font-bold text-sm tracking-wide shadow-xs transition-all ${
-                  file
-                    ? "bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
-                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                }`}
-              >
-                Upload and Summarize
+              {/* Language selection */}
+              <div style={{ marginBottom: "24px" }}>
+                <label className="form-label">Output Language</label>
+                <div className="option-grid">
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      className={`option-chip ${summaryLanguage === l ? "selected" : ""}`}
+                      onClick={() => setSummaryLanguage(l)}
+                    >
+                      {LANGUAGE_LABELS[l]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button type="submit" disabled={!file || uploading} className="btn btn-primary" style={{ width: "100%", padding: "12px", fontSize: "14px" }}>
+                {uploading ? "Uploading..." : "Generate Summary"}
               </button>
             </form>
-          </div>
+
+            {/* Live Stats */}
+            <div style={{ marginTop: "32px", textAlign: "center", fontSize: "12px", color: "var(--color-text-muted)" }}>
+              🔒 Encrypted Upload · ⚡ Fast Gemini 3.6 AI · {stats.totalDocuments > 0 ? `${stats.totalDocuments.toLocaleString()} documents summarized` : "Thousands of documents processed"}
+            </div>
+          </AnimatedContainer>
         )}
 
-        {/* UPLOADING & POLLING PROGRESS SCREEN */}
-        {(uploading || polling) && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs w-full max-w-md p-8 text-center space-y-6">
-            <div className="flex justify-center">
-              <div className="relative w-16 h-16">
-                {/* Rotating Spinner */}
-                <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-              </div>
+        {/* Processing State */}
+        {docId && polling && !activeSummary && (
+          <AnimatedContainer animation="scale-in" style={{ width: "100%", maxWidth: "480px", textAlign: "center" }}>
+            <div className="card" style={{ padding: "40px 32px" }}>
+              <div className="page-spinner" style={{ margin: "0 auto 20px" }} />
+              <h3 style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}>Processing Document...</h3>
+              <p style={{ fontSize: "13px", color: "var(--color-brand)" }}>{STAGE_LABELS[docStage || "UPLOADED"]}</p>
             </div>
+          </AnimatedContainer>
+        )}
 
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-slate-800">
-                {uploading ? "Uploading Document..." : "Processing Document Pipeline"}
-              </h3>
-              <p className="text-sm text-slate-500">
-                {uploading
-                  ? "Writing file bytes to storage repository..."
-                  : STAGE_LABELS[docStage || "UPLOADED"] || "Executing pipeline steps..."}
+        {/* Summary Result */}
+        {docId && activeSummary && (
+          <AnimatedContainer animation="fade-up" style={{ width: "100%", maxWidth: "760px" }}>
+            <div className="card" style={{ padding: "28px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                <h2 style={{ fontSize: "18px", fontWeight: 700 }}>{activeSummary.title}</h2>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button className="btn btn-secondary" style={{ fontSize: "12px" }} onClick={handleShare}>🔗 Share</button>
+                  <button className="btn btn-secondary" style={{ fontSize: "12px" }} onClick={() => handleCopyText(activeSummary.summary)}>Copy</button>
+                  <button className="btn btn-primary" style={{ fontSize: "12px" }} onClick={() => exportSummaryToPdf(activeSummary as any)}>Export PDF</button>
+                  {user && (
+                    <a href={`/documents/${docId}`} className="btn btn-secondary" style={{ fontSize: "12px" }}>
+                      Chat Q&A →
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="section-label">Executive Summary</div>
+              <p style={{ fontSize: "15px", lineHeight: 1.7, color: "var(--color-text-primary)", marginBottom: "24px" }}>
+                {activeSummary.summary}
               </p>
-            </div>
 
-            {/* Stages Visual Progression */}
-            {!uploading && (
-              <div className="border-t border-slate-100 pt-4 text-left space-y-3">
-                {[
-                  { key: "EXTRACTING", label: "Text Extraction" },
-                  { key: "NORMALIZING", label: "Format Normalization" },
-                  { key: "SUMMARIZING", label: "AI Summary Generation" },
-                ].map((step, idx) => {
-                  const stages = ["UPLOADED", "EXTRACTING", "OCR_PROCESSING", "NORMALIZING", "SUMMARIZING", "COMPLETED", "FAILED"];
-                  const currentIdx = stages.indexOf(docStage || "UPLOADED");
-                  const stepIdx = stages.indexOf(step.key);
+              <div className="section-label">Key Takeaways</div>
+              <ul style={{ paddingLeft: "20px", marginBottom: "24px", color: "var(--color-text-secondary)" }}>
+                {activeSummary.keyPoints?.map((pt, i) => (
+                  <li key={i} style={{ marginBottom: "6px" }}>{pt}</li>
+                ))}
+              </ul>
 
-                  // Specialized checks for OCR fallbacks
-                  const isCurrent = currentIdx === stepIdx || (step.key === "EXTRACTING" && docStage === "OCR_PROCESSING");
-                  const isDone = currentIdx > stepIdx && docStage !== "FAILED";
-
-                  return (
-                    <div key={step.key} className="flex items-center gap-3 text-xs font-semibold">
-                      <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold ${
-                          isDone
-                            ? "bg-emerald-100 text-emerald-700"
-                            : isCurrent
-                            ? "bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500/20"
-                            : "bg-slate-100 text-slate-400"
-                        }`}
-                      >
-                        {isDone ? "✓" : idx + 1}
-                      </div>
-                      <span
-                        className={
-                          isDone
-                            ? "text-slate-500 line-through decoration-slate-300"
-                            : isCurrent
-                            ? "text-indigo-600 font-bold"
-                            : "text-slate-400"
-                        }
-                      >
-                        {step.label}
-                        {isCurrent && docStage === "OCR_PROCESSING" && " (OCR fallback)"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* RESULTS SCREEN */}
-        {docId && !polling && activeSummary && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs w-full p-6 sm:p-10 space-y-8">
-            {/* Title / Action bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-5 gap-4">
-              <div>
-                <span className="text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 py-1 px-2.5 rounded-full border border-emerald-200">
-                  Ready
-                </span>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight mt-2.5">
-                  {activeSummary.title}
-                </h2>
-              </div>
-              <button
-                onClick={handleUploadAnother}
-                className="inline-flex items-center justify-center px-4 py-2 border border-slate-300 rounded-md font-bold text-xs bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all shadow-2xs w-full sm:w-auto shrink-0"
-              >
-                Upload New
-              </button>
-            </div>
-
-            {/* Length Switcher */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Detail Level:
-              </span>
-              <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-200/60 p-1 rounded-md">
-                {(["SHORT", "MEDIUM", "LONG"] as const).map((len) => (
-                  <button
-                    key={len}
-                    onClick={() => handleLengthSwitch(len)}
-                    disabled={generatingAlternative}
-                    className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md font-bold text-xs transition-all ${
-                      summaryLength === len
-                        ? "bg-white text-indigo-600 shadow-2xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    {len}
-                  </button>
+              <div className="section-label">Core Concepts</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {activeSummary.mainIdeas?.map((idea, i) => (
+                  <div key={i} style={{ padding: "6px 12px", background: "var(--color-surface-secondary)", border: "1px solid var(--color-border)", borderRadius: "6px", fontSize: "12px" }}>
+                    {idea}
+                  </div>
                 ))}
               </div>
-              {generatingAlternative && (
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500 sm:ml-auto">
-                  <div className="w-3.5 h-3.5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                  Generating alternative...
-                </div>
-              )}
             </div>
-
-            {/* Main Structured output display */}
-            <div className="space-y-6">
-              {/* Summary Paragraph */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                  Summary
-                </h3>
-                <p className="text-sm sm:text-base text-slate-700 leading-relaxed font-medium">
-                  {activeSummary.summary}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                {/* Key Points */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                    Key Points
-                  </h3>
-                  <ul className="space-y-2.5">
-                    {activeSummary.keyPoints.map((point: string, idx: number) => (
-                      <li key={idx} className="flex gap-2 text-sm text-slate-600 leading-relaxed font-medium">
-                        <span className="text-indigo-600 text-xs shrink-0 select-none mt-0.5">•</span>
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Main Ideas */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                    Main Ideas
-                  </h3>
-                  <div className="space-y-2">
-                    {activeSummary.mainIdeas.map((idea: string, idx: number) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 leading-normal font-medium hover:border-slate-300 transition-colors"
-                      >
-                        {idea}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </AnimatedContainer>
         )}
-      </main>
-    </div>
+      </div>
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="card" style={{ padding: "24px", maxWidth: "440px", width: "100%" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>Share Summary</h3>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <input type="text" className="form-input" readOnly value={shareUrl || ""} />
+              <button className="btn btn-primary" onClick={() => handleCopyText(shareUrl || "")}>Copy</button>
+            </div>
+            <button className="btn btn-secondary" style={{ width: "100%" }} onClick={() => setShowShareModal(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} defaultMode={authModalMode} anonymousSessionId={anonymousSessionId} onSuccess={(u) => setUser(u)} />
+      <PastSummariesModal isOpen={isPastSummariesOpen} onClose={() => setIsPastSummariesOpen(false)} userId={user?.id} anonymousSessionId={anonymousSessionId} onSelectDocument={(id) => { setDocId(id); fetchStatus(id); }} />
+    </main>
   );
 }

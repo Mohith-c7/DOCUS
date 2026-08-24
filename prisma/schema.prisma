@@ -40,25 +40,40 @@ enum SummaryLength {
   LONG
 }
 
-model Document {
-  id               String            @id @default(uuid())
-  originalFileName String
-  fileType         FileType
-  mimeType         String
-  fileSizeBytes    Int
-  storageKey       String
-  status           DocumentStatus    @default(UPLOADED)
-  currentStage     ProcessingStage   @default(UPLOADED)
-  extractionMethod ExtractionMethod?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  completedAt      DateTime?
-  failedAt         DateTime?
+enum MessageRole {
+  USER
+  ASSISTANT
+}
 
-  summaries        Summary[]
+model Document {
+  id                 String            @id @default(uuid())
+  userId             String?
+  anonymousSessionId String?
+  originalFileName   String
+  fileType           FileType
+  mimeType           String
+  fileSizeBytes      Int
+  storageKey         String
+  status             DocumentStatus    @default(UPLOADED)
+  currentStage       ProcessingStage   @default(UPLOADED)
+  extractionMethod   ExtractionMethod?
+  // Premium fields
+  shareId            String?           @unique
+  userTitle          String?           // user-editable title override
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  completedAt        DateTime?
+  failedAt           DateTime?
+
+  summaries          Summary[]
+  collections        DocumentCollection[]
+  qaSessions         QASession[]
 
   @@index([status])
   @@index([currentStage])
+  @@index([userId])
+  @@index([anonymousSessionId])
+  @@index([shareId])
 }
 
 model Summary {
@@ -71,9 +86,59 @@ model Summary {
   keyPoints         String[]
   mainIdeas         String[]
   processingVersion String
+  // Template and language metadata
+  template          String?       @default("general")
+  language          String?       @default("en")
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   @@unique([documentId, length])
   @@index([documentId])
+}
+
+model Collection {
+  id          String               @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  color       String               @default("#635bff")
+  icon        String               @default("folder")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  documents   DocumentCollection[]
+
+  @@index([userId])
+}
+
+model DocumentCollection {
+  documentId   String
+  collectionId String
+  addedAt      DateTime   @default(now())
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, collectionId])
+  @@index([collectionId])
+}
+
+model QASession {
+  id         String      @id @default(uuid())
+  documentId String
+  document   Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  messages   QAMessage[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([documentId])
+}
+
+model QAMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   QASession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
 }

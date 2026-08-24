@@ -7,6 +7,9 @@ const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
 const connection = {
   host: redisHost,
   port: redisPort,
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,
+  connectTimeout: 1000,
 };
 
 // 1. Declare the BullMQ Queue for document processing
@@ -23,10 +26,38 @@ export const documentQueue = new Queue('document-processing', {
   },
 });
 
+let redisWarningLogged = false;
+
+documentQueue.on('error', (err) => {
+  if (!redisWarningLogged) {
+    console.warn(`[Queue Info] Redis offline locally (${err.message}). Defaulting to automatic inline async background execution.`);
+    redisWarningLogged = true;
+  }
+});
+
 // Helper to push document IDs to the background worker queue
-export async function addDocumentToQueue(documentId: string): Promise<Job> {
+export async function addDocumentToQueue(documentId: string): Promise<Job | null> {
   console.log(`Queue: Adding document ${documentId} to task queue...`);
-  return documentQueue.add('process', { documentId });
+  
+  const addWithTimeout = Promise.race([
+    documentQueue.add('process', { documentId }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Redis connection timeout (offline)')), 1500)
+    ),
+  ]);
+
+  try {
+    return await addWithTimeout;
+  } catch (queueErr) {
+    console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing inline background processing for document ${documentId}...`);
+    // Fallback: run pipeline asynchronously in background without blocking response
+    setTimeout(() => {
+      processDocument(documentId).catch((procErr) => {
+        console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+      });
+    }, 10);
+    return null;
+  }
 }
 
 // 2. Initialize Worker thread daemon with hot-reload caching for local development
@@ -49,13 +80,16 @@ const globalForWorker = globalThis as unknown as { bullWorker?: Worker };
 if (process.env.DISABLE_INLINE_WORKER !== 'true') {
   if (process.env.NODE_ENV === 'production') {
     worker = new Worker('document-processing', workerHandler, { connection });
+    worker.on('error', () => {});
   } else {
     // Prevent Next.js compilation loops from spawning multiple concurrent TCP connections to Redis
     if (!globalForWorker.bullWorker) {
       globalForWorker.bullWorker = new Worker('document-processing', workerHandler, { connection });
+      globalForWorker.bullWorker.on('error', () => {});
     }
     worker = globalForWorker.bullWorker;
   }
 }
 
 export { worker };
+

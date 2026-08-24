@@ -41,6 +41,8 @@ export async function POST(
     }
 
     const requestedLength = validationResult.data.length;
+    const requestedTemplate = validationResult.data.template ?? 'general';
+    const requestedLanguage = validationResult.data.language ?? 'en';
 
     // 2. Fetch Document to check if it exists and has completed processing successfully
     const doc = await getDocumentById(id);
@@ -52,7 +54,7 @@ export async function POST(
       );
     }
 
-    // 3. Cache Check: Reuse summary if it already exists in the database
+    // 3. Cache Check: Reuse summary if it already exists in the database and is not a mock summary
     const existingSummary = await db.summary.findUnique({
       where: {
         documentId_length: {
@@ -62,10 +64,11 @@ export async function POST(
       },
     });
 
-    if (existingSummary) {
+    if (existingSummary && !existingSummary.summary.includes('[Mock Summary')) {
       console.log(`API: Reusing cached summary of length ${requestedLength} for document ${id}`);
       return NextResponse.json({ summary: existingSummary }, { status: 200 });
     }
+
 
     // 4. Retrieve normalized content from object storage
     let textContent = '';
@@ -83,7 +86,7 @@ export async function POST(
 
     // 5. Generate summary using the configured strategy
     console.log(`API: Generating new summary of length ${requestedLength} for document ${id}`);
-    const summaryResult = await summarizeDocumentContent(textContent, requestedLength);
+    const summaryResult = await summarizeDocumentContent(textContent, requestedLength, requestedTemplate, requestedLanguage);
 
     // 6. Persist summary to the database
     const summary = await createSummary({
@@ -98,6 +101,7 @@ export async function POST(
 
     return NextResponse.json({ summary }, { status: 201 });
   } catch (error) {
+    console.error('API Error in POST /api/documents/[id]/summaries:', error);
     const { status, body } = formatErrorResponse(error);
     return NextResponse.json(body, { status });
   }

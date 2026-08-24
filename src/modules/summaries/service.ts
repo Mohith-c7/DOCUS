@@ -22,29 +22,30 @@ export async function createSummary(input: CreateSummaryInput): Promise<Summary>
     throw new AppError('DOCUMENT_NOT_FOUND', 404, `Document with ID ${input.documentId} not found`);
   }
 
-  try {
-    return await db.summary.create({
-      data: {
+  return await db.summary.upsert({
+    where: {
+      documentId_length: {
         documentId: input.documentId,
         length: input.length,
-        title: input.title,
-        summary: input.summary,
-        keyPoints: input.keyPoints,
-        mainIdeas: input.mainIdeas,
-        processingVersion: input.processingVersion,
       },
-    });
-  } catch (error) {
-    // Check for unique constraint violation (documentId, length)
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-      throw new AppError(
-        'VALIDATION_ERROR',
-        409,
-        `A summary of length ${input.length} already exists for this document`
-      );
-    }
-    throw error;
-  }
+    },
+    update: {
+      title: input.title,
+      summary: input.summary,
+      keyPoints: input.keyPoints,
+      mainIdeas: input.mainIdeas,
+      processingVersion: input.processingVersion,
+    },
+    create: {
+      documentId: input.documentId,
+      length: input.length,
+      title: input.title,
+      summary: input.summary,
+      keyPoints: input.keyPoints,
+      mainIdeas: input.mainIdeas,
+      processingVersion: input.processingVersion,
+    },
+  });
 }
 
 export async function getSummariesByDocumentId(documentId: string): Promise<Summary[]> {

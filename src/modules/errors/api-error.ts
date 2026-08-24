@@ -9,6 +9,8 @@ export type ErrorCode =
   | 'DOCUMENT_NOT_FOUND'
   | 'DOCUMENT_NOT_READY'
   | 'DOCUMENT_PROCESSING_FAILED'
+  | 'NOT_FOUND'
+  | 'COLLECTION_NOT_FOUND'
   // Processing
   | 'EXTRACTION_FAILED'
   | 'OCR_FAILED'
@@ -26,6 +28,13 @@ export type ErrorCode =
 export interface ValidationErrorDetail {
   field: string;
   message: string;
+}
+
+export function mapZodIssues(issues: Array<{ path: Array<string | number | symbol>; message: string }>): ValidationErrorDetail[] {
+  return issues.map((i) => ({
+    field: i.path.map((p) => String(p)).join('.') || 'root',
+    message: i.message,
+  }));
 }
 
 export class AppError extends Error {

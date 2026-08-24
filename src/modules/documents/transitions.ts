@@ -4,8 +4,8 @@ import { AppError } from '../errors/api-error';
 const ALLOWED_STATUS_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   UPLOADED: ['PROCESSING', 'FAILED'],
   PROCESSING: ['COMPLETED', 'FAILED'],
-  COMPLETED: [], // Terminal state
-  FAILED: ['PROCESSING'], // Allow retry / reset to processing
+  COMPLETED: ['UPLOADED', 'PROCESSING'], // Allow re-processing / resetting
+  FAILED: ['PROCESSING', 'UPLOADED'], // Allow retry / reset
 };
 
 const ALLOWED_STAGE_TRANSITIONS: Record<ProcessingStage, ProcessingStage[]> = {
@@ -15,8 +15,8 @@ const ALLOWED_STAGE_TRANSITIONS: Record<ProcessingStage, ProcessingStage[]> = {
   OCR_PROCESSING: ['NORMALIZING', 'FAILED'],
   NORMALIZING: ['SUMMARIZING', 'FAILED'],
   SUMMARIZING: ['COMPLETED', 'FAILED'],
-  COMPLETED: [], // Terminal state
-  FAILED: ['EXTRACTING', 'OCR_PROCESSING'], // Allow retry from different entry points
+  COMPLETED: ['UPLOADED', 'EXTRACTING'], // Allow re-processing reset
+  FAILED: ['EXTRACTING', 'OCR_PROCESSING', 'UPLOADED'], // Allow retry from different entry points
 };
 
 /**
