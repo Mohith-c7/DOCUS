@@ -1,8 +1,13 @@
 import { createClient } from "@/utils/supabase/middleware";
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  return createClient(request);
+  try {
+    return createClient(request);
+  } catch (err) {
+    console.warn('[Middleware] Edge request passthrough:', err);
+    return NextResponse.next();
+  }
 }
 
 export const config = {
