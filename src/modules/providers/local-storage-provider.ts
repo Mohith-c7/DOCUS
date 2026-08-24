@@ -1,12 +1,23 @@
 import { StorageProvider } from './types';
 import path from 'path';
 import fs from 'fs/promises';
+import os from 'os';
 
 export class LocalStorageProvider implements StorageProvider {
   private baseDir: string;
 
-  constructor(baseDir: string = path.resolve('storage')) {
-    this.baseDir = baseDir;
+  constructor(baseDir?: string) {
+    const isServerless =
+      process.env.NETLIFY === 'true' ||
+      process.env.VERCEL === 'true' ||
+      process.env.NODE_ENV === 'production';
+    
+    // On Serverless (Netlify/AWS Lambda), standard directories are read-only. Use os.tmpdir() (/tmp)
+    const defaultDir = isServerless
+      ? path.join(os.tmpdir(), 'docus_storage')
+      : path.resolve('storage');
+
+    this.baseDir = baseDir || defaultDir;
   }
 
   private resolvePath(storageKey: string): string {
@@ -23,7 +34,7 @@ export class LocalStorageProvider implements StorageProvider {
     const filePath = this.resolvePath(storageKey);
     const parentDir = path.dirname(filePath);
     
-    // Ensure directory structure exists
+    // Ensure directory structure exists (in writable /tmp for serverless)
     await fs.mkdir(parentDir, { recursive: true });
     await fs.writeFile(filePath, file);
   }
@@ -42,7 +53,6 @@ export class LocalStorageProvider implements StorageProvider {
     try {
       await fs.unlink(filePath);
     } catch (error) {
-      // Ignore if file already deleted/does not exist
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
@@ -51,7 +61,6 @@ export class LocalStorageProvider implements StorageProvider {
 
   async getSignedUploadUrl(storageKey: string, _mimeType: string): Promise<string> {
     void _mimeType;
-    // For local mock, return a standard localhost API path or local schema
     return `http://localhost:3000/api/mock-upload?key=${encodeURIComponent(storageKey)}`;
   }
 }

@@ -1,18 +1,54 @@
+import { StorageProvider } from './types';
 import { LocalStorageProvider } from './local-storage-provider';
 import { SupabaseStorageProvider } from './supabase-storage-provider';
 import { PDFExtractionProvider } from './pdf-extraction-provider';
 import { OCRProvider } from './ocr-provider';
 import { GeminiSummarizationProvider } from './gemini-summarization-provider';
 
-const hasSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const hasSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+class ResilientStorageProvider implements StorageProvider {
+  private primary: StorageProvider;
+  private fallback: StorageProvider;
 
-export const storageProvider =
-  hasSupabaseUrl && hasSupabaseKey
-    ? new SupabaseStorageProvider()
-    : new LocalStorageProvider();
+  constructor() {
+    this.primary = new SupabaseStorageProvider();
+    this.fallback = new LocalStorageProvider();
+  }
 
+  async upload(file: Buffer, storageKey: string, mimeType: string): Promise<void> {
+    try {
+      await this.primary.upload(file, storageKey, mimeType);
+    } catch (primaryErr) {
+      console.warn(`[Storage] Primary storage upload failed (${(primaryErr as Error).message}). Routing to fallback storage...`);
+      await this.fallback.upload(file, storageKey, mimeType);
+    }
+  }
+
+  async getObject(storageKey: string): Promise<Buffer> {
+    try {
+      return await this.primary.getObject(storageKey);
+    } catch {
+      return await this.fallback.getObject(storageKey);
+    }
+  }
+
+  async delete(storageKey: string): Promise<void> {
+    try {
+      await this.primary.delete(storageKey);
+    } catch {
+      await this.fallback.delete(storageKey);
+    }
+  }
+
+  async getSignedUploadUrl(storageKey: string, mimeType: string): Promise<string> {
+    try {
+      return await this.primary.getSignedUploadUrl(storageKey, mimeType);
+    } catch {
+      return await this.fallback.getSignedUploadUrl(storageKey, mimeType);
+    }
+  }
+}
+
+export const storageProvider: StorageProvider = new ResilientStorageProvider();
 export const pdfExtractionProvider = new PDFExtractionProvider(storageProvider);
 export const ocrProvider = new OCRProvider(storageProvider);
-// Factory function to create a fresh GeminiSummarizationProvider instance per request
 export const getSummarizationProvider = () => new GeminiSummarizationProvider();

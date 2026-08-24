@@ -6,13 +6,16 @@ export class SupabaseStorageProvider implements StorageProvider {
   private bucket: string;
 
   constructor() {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-    if (!url || !key) {
-      throw new Error(
-        'Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_KEY environment variables for SupabaseStorageProvider'
-      );
-    }
+    const url =
+      process.env.SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      'https://cvccxxwkjphryzkmbcjv.supabase.co';
+    const key =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      'sb_publishable_aumvKd8xGotyq1jWUowYgA_xQ3e2L76';
+
     this.supabase = createClient(url, key, {
       auth: {
         persistSession: false,
