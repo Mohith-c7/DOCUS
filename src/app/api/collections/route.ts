@@ -13,10 +13,10 @@ const CreateCollectionSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const userId = searchParams.get('userId') || searchParams.get('anonymousSessionId');
 
     if (!userId) {
-      throw new AppError('VALIDATION_ERROR', 400, 'userId is required to list collections.');
+      throw new AppError('VALIDATION_ERROR', 400, 'userId or anonymousSessionId is required to list collections.');
     }
 
     const collections = await db.collection.findMany({
@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId') || json.userId;
+    const userId = searchParams.get('userId') || searchParams.get('anonymousSessionId') || json.userId || json.anonymousSessionId;
 
     if (!userId) {
-      throw new AppError('VALIDATION_ERROR', 400, 'userId is required to create a collection.');
+      throw new AppError('VALIDATION_ERROR', 400, 'userId or anonymousSessionId is required to create a collection.');
     }
 
     const parsed = CreateCollectionSchema.safeParse(json);

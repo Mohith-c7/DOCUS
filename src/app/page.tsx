@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { exportSummaryToPdf } from "@/lib/pdf-export";
+import { copyToClipboard } from "@/lib/copy";
 import { AuthModal } from "@/components/AuthModal";
 import { PastSummariesModal } from "@/components/PastSummariesModal";
 import { useToast } from "@/components/ui/Toast";
@@ -269,7 +270,7 @@ export default function Home() {
   };
 
   const handleCopyText = (text: string) => {
-    navigator.clipboard.writeText(text);
+    copyToClipboard(text);
     toast.success("Copied to clipboard!");
   };
 

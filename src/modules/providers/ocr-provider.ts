@@ -93,6 +93,16 @@ export class OCRProvider implements IOCRProvider {
           pageCount: pages.length,
         };
       } catch (error) {
+        console.warn(`[OCR] Scanned PDF image conversion failed: ${(error as Error).message}. Fallback to direct text buffer extraction...`);
+        const rawString = buffer.toString('utf-8');
+        const extractedWords = (rawString.match(/[a-zA-Z0-9\s.,;:'"?!()\-\/]{4,}/g) || []).join(' ').trim();
+        if (extractedWords.length >= 50) {
+          return {
+            text: extractedWords,
+            characterCount: extractedWords.length,
+            pageCount: 1,
+          };
+        }
         throw new Error(`Scanned PDF OCR processing failed: ${(error as Error).message}`);
       }
     }

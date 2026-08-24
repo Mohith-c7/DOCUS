@@ -17,13 +17,35 @@ export function AuthModal({ isOpen, onClose, onSuccess, anonymousSessionId, defa
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setErrorMsg('Please enter your email address to reset password.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Failed to send password reset email.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setResetSent(false);
 
     try {
       if (mode === 'signup') {
@@ -36,6 +58,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, anonymousSessionId, defa
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ anonymousSessionId, userId: data.user.id }),
             }).catch(() => {});
+          }
+          if (!data.session) {
+            setErrorMsg('Account created! Check your email to confirm your account, then sign in.');
+            setMode('login');
+            return;
           }
           onSuccess(data.user);
           onClose();
@@ -171,11 +198,20 @@ export function AuthModal({ isOpen, onClose, onSuccess, anonymousSessionId, defa
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label className="form-label" style={{ margin: 0 }}>Password</label>
                 {mode === 'login' && (
-                  <span style={{ fontSize: '12px', color: 'var(--color-brand)', cursor: 'pointer', fontWeight: 500 }}>
+                  <button
+                    type="button"
+                    onClick={handleResetPassword}
+                    style={{ background: 'none', border: 'none', padding: 0, fontSize: '12px', color: 'var(--color-brand)', cursor: 'pointer', fontWeight: 500 }}
+                  >
                     Forgot password?
-                  </span>
+                  </button>
                 )}
               </div>
+              {resetSent && (
+                <div style={{ padding: '8px 12px', background: '#e0f2fe', color: '#0369a1', borderRadius: '6px', fontSize: '12px', marginBottom: '10px' }}>
+                  Password reset link sent to your email!
+                </div>
+              )}
               <input
                 className="form-input"
                 type="password"

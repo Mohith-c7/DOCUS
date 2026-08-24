@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { exportSummaryToPdf } from "@/lib/pdf-export";
+import { copyToClipboard } from "@/lib/copy";
 import { QAPanel } from "@/components/chat/QAPanel";
 import {
   TEMPLATE_LABELS,
@@ -104,7 +105,7 @@ export default function DocumentDetailPage() {
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+    copyToClipboard(text);
     toast.success("Copied to clipboard!");
   };
 

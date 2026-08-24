@@ -67,17 +67,20 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
 
+      let sseBuffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(trimmed.slice(6));
               if (data.type === "session") {
                 setSessionId(data.sessionId);
               } else if (data.type === "token") {
@@ -91,7 +94,7 @@ export function QAPanel({ documentId, documentTitle }: QAPanelProps) {
                 setCurrentStreamToken("");
               }
             } catch {
-              // ignore parse errors for partial json
+              // ignore partial line parse
             }
           }
         }

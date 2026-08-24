@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { copyToClipboard } from '@/lib/copy';
 
 interface ChatMessageProps {
   role: 'USER' | 'ASSISTANT';
@@ -11,7 +12,7 @@ export function ChatMessage({ role, content, createdAt }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    copyToClipboard(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
