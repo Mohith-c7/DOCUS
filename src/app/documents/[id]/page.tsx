@@ -77,6 +77,10 @@ export default function DocumentDetailPage() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActiveSummary(data.summary);
+      setSummaries((prev) => {
+        const filtered = prev.filter((s) => s.length !== length);
+        return [...filtered, data.summary];
+      });
       toast.success("Summary updated!");
     } catch {
       toast.error("Failed to generate summary");

@@ -11,7 +11,7 @@ export class GeminiSummarizationProvider implements SummarizationProvider {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-3.6-flash') {
+  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-2.0-flash') {
     this.apiKey = apiKey;
     this.model = model;
     console.log('🔑 Gemini API key loaded (length):', this.apiKey ? this.apiKey.length : 0);
@@ -122,7 +122,7 @@ You MUST strictly output JSON conforming to the schema:
       },
     };
 
-    const modelsToTry = ['gemini-3.6-flash', 'gemini-flash-latest'].filter(
+    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-flash-latest'].filter(
       (value, index, self) => self.indexOf(value) === index
     );
 

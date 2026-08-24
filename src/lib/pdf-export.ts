@@ -9,6 +9,14 @@ interface SummaryPdfData {
   originalFileName?: string;
 }
 
+function sanitizePdfText(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/[•▪]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+}
+
 export function exportSummaryToPdf(data: SummaryPdfData) {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -47,10 +55,11 @@ export function exportSummaryToPdf(data: SummaryPdfData) {
   yPos = 36;
 
   // Document Title
+  const cleanTitle = sanitizePdfText(data.title);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  const titleLines = doc.splitTextToSize(data.title, contentWidth);
+  const titleLines = doc.splitTextToSize(cleanTitle, contentWidth);
   doc.text(titleLines, margin, yPos);
   yPos += titleLines.length * 6 + 4;
 
@@ -73,7 +82,8 @@ export function exportSummaryToPdf(data: SummaryPdfData) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
   doc.setTextColor(51, 65, 85);
-  const summaryLines = doc.splitTextToSize(data.summary, contentWidth);
+  const cleanSummary = sanitizePdfText(data.summary);
+  const summaryLines = doc.splitTextToSize(cleanSummary, contentWidth);
   
   // Page overflow check helper
   const checkPageBreak = (neededHeight: number) => {
@@ -101,7 +111,8 @@ export function exportSummaryToPdf(data: SummaryPdfData) {
     doc.setTextColor(51, 65, 85);
 
     for (const point of data.keyPoints) {
-      const bulletLines = doc.splitTextToSize(`• ${point}`, contentWidth - 4);
+      const cleanPoint = sanitizePdfText(point);
+      const bulletLines = doc.splitTextToSize(`- ${cleanPoint}`, contentWidth - 4);
       checkPageBreak(bulletLines.length * 5 + 2);
       doc.text(bulletLines, margin + 2, yPos);
       yPos += bulletLines.length * 5 + 2;
@@ -123,7 +134,8 @@ export function exportSummaryToPdf(data: SummaryPdfData) {
     doc.setTextColor(51, 65, 85);
 
     for (const idea of data.mainIdeas) {
-      const ideaLines = doc.splitTextToSize(`▪ ${idea}`, contentWidth - 4);
+      const cleanIdea = sanitizePdfText(idea);
+      const ideaLines = doc.splitTextToSize(`- ${cleanIdea}`, contentWidth - 4);
       checkPageBreak(ideaLines.length * 5 + 2);
       doc.text(ideaLines, margin + 2, yPos);
       yPos += ideaLines.length * 5 + 2;
@@ -144,7 +156,7 @@ export function exportSummaryToPdf(data: SummaryPdfData) {
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, 290, { align: 'right' });
   }
 
-  const safeFileName = (data.title || 'summary')
+  const safeFileName = (cleanTitle || 'summary')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '_')
     .replace(/_+/g, '_')

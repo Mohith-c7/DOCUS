@@ -120,20 +120,33 @@ ${textContent}`;
       generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30000),
-    });
+    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    let geminiJson: Record<string, unknown> | null = null;
 
-    if (!response.ok) {
+    for (const targetModel of modelsToTry) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`;
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (response.ok) {
+          geminiJson = await response.json();
+          break;
+        }
+      } catch {
+        // try next model
+      }
+    }
+
+    if (!geminiJson) {
       throw new AppError('AI_PROVIDER_UNAVAILABLE', 502, 'AI Q&A service unavailable. Please try again.');
     }
 
-    const geminiJson = await response.json();
-    const answerText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate an answer. Please try again.';
+    const candidates = geminiJson.candidates as Array<{ content?: { parts?: Array<{ text?: string }> } }> | undefined;
+    const answerText = candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate an answer. Please try again.';
 
     const assistantMsg = await db.qAMessage.create({
       data: { sessionId: session.id, role: MessageRole.ASSISTANT, content: answerText },

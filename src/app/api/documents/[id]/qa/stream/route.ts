@@ -113,17 +113,29 @@ ${textContent}`;
           generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
         };
 
-        // Use streaming endpoint
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse`;
-        const geminiResponse = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-          body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(45000),
-        });
+        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+        let geminiResponse: Response | null = null;
 
-        if (!geminiResponse.ok || !geminiResponse.body) {
-          send({ type: 'error', message: 'AI service unavailable.' });
+        for (const targetModel of modelsToTry) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse`;
+          try {
+            const resp = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+              body: JSON.stringify(requestBody),
+              signal: AbortSignal.timeout(45000),
+            });
+            if (resp.ok && resp.body) {
+              geminiResponse = resp;
+              break;
+            }
+          } catch {
+            // try next model
+          }
+        }
+
+        if (!geminiResponse || !geminiResponse.body) {
+          send({ type: 'error', message: 'AI Q&A service unavailable.' });
           controller.close();
           return;
         }
