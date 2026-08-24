@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     // Status filter
     if (status) {
-      whereClause.status = status;
+      whereClause.status = status as DocumentStatus;
     }
 
     // Collection filter — join through DocumentCollection

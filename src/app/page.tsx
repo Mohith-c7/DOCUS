@@ -63,13 +63,17 @@ export default function Home() {
   const [docId, setDocId] = useState<string | null>(null);
   const [docStage, setDocStage] = useState<string | null>(null);
   const [activeSummary, setActiveSummary] = useState<SummaryItem | null>(null);
+  const [, setSummariesList] = useState<SummaryItem[]>([]);
+  const [, setGeneratingAlternative] = useState(false);
 
   // Stats & Share
   const [stats, setStats] = useState<{ totalDocuments: number; totalSummaries: number }>({ totalDocuments: 0, totalSummaries: 0 });
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Drag UI
+  // Errors & Drag UI
+  const [, setError] = useState<string | null>(null);
+  const [, setValidationError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   // References
@@ -468,7 +472,7 @@ export default function Home() {
       )}
 
       {/* Modals */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} defaultMode={authModalMode} anonymousSessionId={anonymousSessionId} onSuccess={(u) => setUser(u)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} defaultMode={authModalMode} anonymousSessionId={anonymousSessionId} onSuccess={(u) => setUser(u as User)} />
       <PastSummariesModal isOpen={isPastSummariesOpen} onClose={() => setIsPastSummariesOpen(false)} userId={user?.id} anonymousSessionId={anonymousSessionId} onSelectDocument={(id) => { setDocId(id); fetchStatus(id); }} />
     </main>
   );
