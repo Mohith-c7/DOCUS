@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    return formatErrorResponse(error);
+    const { status, body } = formatErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

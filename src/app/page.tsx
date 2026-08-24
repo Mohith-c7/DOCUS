@@ -123,12 +123,6 @@ export default function Home() {
       setUser(session?.user ?? null);
     });
 
-    // Fetch stats
-    fetch("/api/stats")
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch(() => {});
-
     return () => { authListener.subscription.unsubscribe(); };
   }, []);
 
@@ -344,7 +338,7 @@ export default function Home() {
                 padding: "12px 16px",
                 display: "flex",
                 alignItems: "center",
-                justify: "space-between",
+                justifyContent: "space-between",
                 gap: "12px",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
               }}>
