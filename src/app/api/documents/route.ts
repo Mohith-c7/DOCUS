@@ -5,7 +5,7 @@ import { DocumentUploadInitSchema, SummaryTemplate, SupportedLanguage } from '@/
 import { formatErrorResponse, AppError } from '@/modules/errors/api-error';
 import { storageProvider } from '@/modules/providers';
 import { addDocumentToQueue } from '@/modules/processing/queue';
-import { ProcessingStage, DocumentStatus, Prisma } from '@prisma/client';
+import { ProcessingStage, DocumentStatus, Prisma, SummaryLength } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {

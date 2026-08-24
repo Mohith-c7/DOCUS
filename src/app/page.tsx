@@ -72,7 +72,7 @@ export default function Home() {
   const [showShareModal, setShowShareModal] = useState(false);
 
   // Errors & Drag UI
-  const [, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [, setValidationError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
