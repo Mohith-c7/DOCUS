@@ -61,13 +61,13 @@ export async function addDocumentToQueue(
   try {
     return await addWithTimeout;
   } catch (queueErr) {
-    console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing inline background processing for document ${documentId}...`);
-    // Fallback: run pipeline asynchronously in background without blocking response
-    setTimeout(() => {
-      processDocument(documentId, options).catch((procErr) => {
-        console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
-      });
-    }, 10);
+    console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing direct pipeline processing for document ${documentId}...`);
+    // Serverless runtime fallback (Netlify): await pipeline execution directly to prevent lambda execution freeze
+    try {
+      await processDocument(documentId, options);
+    } catch (procErr) {
+      console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+    }
     return null;
   }
 }
