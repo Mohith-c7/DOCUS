@@ -47,6 +47,7 @@ export default function DashboardPage() {
 
   // Check auth state
   useEffect(() => {
+    document.title = "Dashboard — My Document Collections & Summaries | Docus AI";
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
         router.push("/");

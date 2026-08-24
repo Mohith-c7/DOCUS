@@ -89,6 +89,7 @@ export default function Home() {
   } | null>(null);
 
   useEffect(() => {
+    document.title = "Docus — Instant AI Document Summarizer & Analytics";
     let localAnonId = localStorage.getItem("docus_anon_session_id");
     if (!localAnonId) {
       localAnonId = crypto.randomUUID();
