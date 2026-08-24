@@ -1,5 +1,6 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { processDocument } from './pipeline';
+import { SummaryTemplate, SupportedLanguage } from '../validation/schemas';
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -11,6 +12,11 @@ const connection = {
   enableOfflineQueue: false,
   connectTimeout: 1000,
 };
+
+export interface ProcessDocumentOptions {
+  template?: SummaryTemplate;
+  language?: SupportedLanguage;
+}
 
 // 1. Declare the BullMQ Queue for document processing
 export const documentQueue = new Queue('document-processing', {
@@ -36,11 +42,14 @@ documentQueue.on('error', (err) => {
 });
 
 // Helper to push document IDs to the background worker queue
-export async function addDocumentToQueue(documentId: string): Promise<Job | null> {
-  console.log(`Queue: Adding document ${documentId} to task queue...`);
+export async function addDocumentToQueue(
+  documentId: string,
+  options?: ProcessDocumentOptions
+): Promise<Job | null> {
+  console.log(`Queue: Adding document ${documentId} to task queue with options:`, options);
   
   const addWithTimeout = Promise.race([
-    documentQueue.add('process', { documentId }),
+    documentQueue.add('process', { documentId, options }),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Redis connection timeout (offline)')), 1500)
     ),
@@ -52,7 +61,7 @@ export async function addDocumentToQueue(documentId: string): Promise<Job | null
     console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing inline background processing for document ${documentId}...`);
     // Fallback: run pipeline asynchronously in background without blocking response
     setTimeout(() => {
-      processDocument(documentId).catch((procErr) => {
+      processDocument(documentId, options).catch((procErr) => {
         console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
       });
     }, 10);
@@ -64,10 +73,10 @@ export async function addDocumentToQueue(documentId: string): Promise<Job | null
 let worker: Worker | undefined;
 
 const workerHandler = async (job: Job) => {
-  const { documentId } = job.data;
+  const { documentId, options } = job.data;
   console.log(`Worker: Processing job ${job.id} for document ${documentId}`);
   try {
-    await processDocument(documentId);
+    await processDocument(documentId, options);
     console.log(`Worker: Completed job ${job.id} for document ${documentId}`);
   } catch (error) {
     console.error(`Worker: Job ${job.id} failed for document ${documentId}:`, error);
@@ -92,4 +101,3 @@ if (process.env.DISABLE_INLINE_WORKER !== 'true') {
 }
 
 export { worker };
-

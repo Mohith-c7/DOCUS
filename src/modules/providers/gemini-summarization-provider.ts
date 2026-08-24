@@ -69,8 +69,9 @@ export class GeminiSummarizationProvider implements SummarizationProvider {
     // Build template-aware system instruction
     const templateContext = TEMPLATE_SYSTEM_PROMPTS[template] || '';
     const languageName = LANGUAGE_NAMES[language] || 'English';
-    const languageInstruction = language !== 'en'
-      ? `\nIMPORTANT: You MUST write ALL output fields (title, summary, keyPoints, mainIdeas) entirely in ${languageName}. Do not use English.`
+    const isNonEnglish = language !== 'en';
+    const languageInstruction = isNonEnglish
+      ? `\nCRITICAL LANGUAGE MANDATE: You MUST write ALL output values (title, summary, keyPoints, mainIdeas) entirely in ${languageName} (${language}). Do NOT use English under any circumstances for the generated text. Every single sentence and bullet point MUST be translated to ${languageName}.`
       : '';
 
     const lengthGuidance = {
@@ -82,20 +83,25 @@ export class GeminiSummarizationProvider implements SummarizationProvider {
     const systemInstruction = `You are a highly capable Document Summary Assistant specializing in ${template === 'general' ? 'general documents' : `${template} documents`}.
 
 Your task: Analyze the provided document content and return a structured summary.
+Target Language: ${languageName.toUpperCase()} (${language})
 Requested detail level: ${length} — ${lengthGuidance}
 ${templateContext ? `\nDomain-specific focus:\n${templateContext}` : ''}${languageInstruction}
 
 You MUST strictly output JSON conforming to the schema:
-- title: A descriptive title for the document.
-- summary: The text summary matching the requested length/detail level.
-- keyPoints: A list of key bullets/takeaways.
-- mainIdeas: A list of overarching core concepts or themes.`;
+- title: A descriptive title for the document (in ${languageName}).
+- summary: The text summary matching the requested length/detail level (in ${languageName}).
+- keyPoints: A list of key bullets/takeaways (in ${languageName}).
+- mainIdeas: A list of overarching core concepts or themes (in ${languageName}).`;
+
+    const userPromptText = isNonEnglish
+      ? `CRITICAL INSTRUCTION: Generate the entire summary in ${languageName} (${language}).\n\nHere is the document content:\n\n${content}`
+      : `Here is the document content:\n\n${content}`;
 
     const requestBody = {
       contents: [
         {
           role: 'user',
-          parts: [{ text: `Here is the document content:\n\n${content}` }],
+          parts: [{ text: userPromptText }],
         },
       ],
       systemInstruction: {

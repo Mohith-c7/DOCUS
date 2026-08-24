@@ -244,6 +244,8 @@ export default function Home() {
     formData.append("file", file);
     if (anonymousSessionId) formData.append("anonymousSessionId", anonymousSessionId);
     if (user?.id) formData.append("userId", user.id);
+    if (summaryTemplate) formData.append("template", summaryTemplate);
+    if (summaryLanguage) formData.append("language", summaryLanguage);
 
     try {
       const response = await fetch("/api/documents", { method: "POST", body: formData });

@@ -101,9 +101,14 @@ export async function summarizeDocumentContent(
   return getSummarizationProvider().summarize(aggregatedText, length, template, language);
 }
 
-export async function processDocument(documentId: string): Promise<void> {
+export async function processDocument(
+  documentId: string,
+  options?: { template?: SummaryTemplate; language?: SupportedLanguage }
+): Promise<void> {
   const pipelineStart = Date.now();
-  console.log(`Pipeline: Starting background processing for document: ${documentId}`);
+  const template = options?.template || 'general';
+  const language = options?.language || 'en';
+  console.log(`Pipeline: Starting background processing for document: ${documentId} (template: ${template}, language: ${language})`);
   let doc = await getDocumentById(documentId);
 
   try {
@@ -173,7 +178,7 @@ export async function processDocument(documentId: string): Promise<void> {
     // Summarization
     doc = await updateDocumentStage(documentId, ProcessingStage.SUMMARIZING);
     const summarizationStart = Date.now();
-    const summaryResult = await summarizeDocumentContent(normalizedText, SummaryLength.MEDIUM);
+    const summaryResult = await summarizeDocumentContent(normalizedText, SummaryLength.MEDIUM, template, language);
 
     await createSummary({
       documentId: doc.id,
@@ -182,6 +187,8 @@ export async function processDocument(documentId: string): Promise<void> {
       summary: summaryResult.summary,
       keyPoints: summaryResult.keyPoints,
       mainIdeas: summaryResult.mainIdeas,
+      template,
+      language,
       processingVersion: '1.0',
     });
     console.log(`Pipeline: MEDIUM summary completed in ${Date.now() - summarizationStart}ms`);

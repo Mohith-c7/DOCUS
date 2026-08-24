@@ -9,6 +9,8 @@ export interface CreateSummaryInput {
   summary: string;
   keyPoints: string[];
   mainIdeas: string[];
+  template?: string;
+  language?: string;
   processingVersion: string;
 }
 
@@ -34,6 +36,8 @@ export async function createSummary(input: CreateSummaryInput): Promise<Summary>
       summary: input.summary,
       keyPoints: input.keyPoints,
       mainIdeas: input.mainIdeas,
+      template: input.template || 'general',
+      language: input.language || 'en',
       processingVersion: input.processingVersion,
     },
     create: {
@@ -43,6 +47,8 @@ export async function createSummary(input: CreateSummaryInput): Promise<Summary>
       summary: input.summary,
       keyPoints: input.keyPoints,
       mainIdeas: input.mainIdeas,
+      template: input.template || 'general',
+      language: input.language || 'en',
       processingVersion: input.processingVersion,
     },
   });
