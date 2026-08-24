@@ -52,7 +52,7 @@ export default function Home() {
 
   // Input State
   const [file, setFile] = useState<File | null>(null);
-  const [summaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
+  const [summaryLength, setSummaryLength] = useState<"SHORT" | "MEDIUM" | "LONG">("MEDIUM");
   const [summaryTemplate, setSummaryTemplate] = useState<SummaryTemplate>("general");
   const [summaryLanguage, setSummaryLanguage] = useState<SupportedLanguage>("en");
 
@@ -248,6 +248,7 @@ export default function Home() {
     if (user?.id) formData.append("userId", user.id);
     if (summaryTemplate) formData.append("template", summaryTemplate);
     if (summaryLanguage) formData.append("language", summaryLanguage);
+    if (summaryLength) formData.append("length", summaryLength);
 
     try {
       const response = await fetch("/api/documents", { method: "POST", body: formData });
@@ -423,6 +424,23 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Summary Detail Level Selection */}
+              <div style={{ marginBottom: "16px" }}>
+                <label className="form-label">Summary Detail Level</label>
+                <div className="option-grid">
+                  {(["SHORT", "MEDIUM", "LONG"] as const).map((len) => (
+                    <button
+                      key={len}
+                      type="button"
+                      className={`option-chip ${summaryLength === len ? "selected" : ""}`}
+                      onClick={() => setSummaryLength(len)}
+                    >
+                      {len === "SHORT" ? "⚡ Short (Concise)" : len === "MEDIUM" ? "📝 Medium (Balanced)" : "🔍 Long (In-Depth)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Template selection */}
               <div style={{ marginBottom: "16px" }}>
                 <label className="form-label">Summary Style / Domain</label>
@@ -464,8 +482,36 @@ export default function Home() {
           </AnimatedContainer>
         )}
 
+        {/* Failure Error Display */}
+        {error && !polling && (
+          <AnimatedContainer animation="scale-in" style={{ width: "100%", maxWidth: "520px", textAlign: "center", margin: "0 auto" }}>
+            <div className="card" style={{ padding: "36px 28px" }}>
+              <div style={{ fontSize: "36px", marginBottom: "12px" }}>⚠️</div>
+              <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>
+                Document Processing Failed
+              </h3>
+              <p style={{ fontSize: "13px", color: "var(--color-danger)", marginBottom: "24px", lineHeight: 1.5 }}>
+                {error}
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setDocId(null);
+                  setActiveSummary(null);
+                  setError(null);
+                  setPolling(false);
+                  setFile(null);
+                }}
+              >
+                Try Another Document →
+              </button>
+            </div>
+          </AnimatedContainer>
+        )}
+
         {/* Processing State */}
-        {docId && polling && !activeSummary && (
+        {docId && polling && !activeSummary && !error && (
           <AnimatedContainer animation="scale-in" style={{ width: "100%", maxWidth: "480px", textAlign: "center" }}>
             <div className="card" style={{ padding: "40px 32px" }}>
               <div className="page-spinner" style={{ margin: "0 auto 20px" }} />

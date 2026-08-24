@@ -103,12 +103,13 @@ export async function summarizeDocumentContent(
 
 export async function processDocument(
   documentId: string,
-  options?: { template?: SummaryTemplate; language?: SupportedLanguage }
+  options?: { length?: SummaryLength; template?: SummaryTemplate; language?: SupportedLanguage }
 ): Promise<void> {
   const pipelineStart = Date.now();
+  const targetLength = options?.length || SummaryLength.MEDIUM;
   const template = options?.template || 'general';
   const language = options?.language || 'en';
-  console.log(`Pipeline: Starting background processing for document: ${documentId} (template: ${template}, language: ${language})`);
+  console.log(`Pipeline: Starting background processing for document: ${documentId} (length: ${targetLength}, template: ${template}, language: ${language})`);
   let doc = await getDocumentById(documentId);
 
   try {
@@ -178,11 +179,11 @@ export async function processDocument(
     // Summarization
     doc = await updateDocumentStage(documentId, ProcessingStage.SUMMARIZING);
     const summarizationStart = Date.now();
-    const summaryResult = await summarizeDocumentContent(normalizedText, SummaryLength.MEDIUM, template, language);
+    const summaryResult = await summarizeDocumentContent(normalizedText, targetLength, template, language);
 
     await createSummary({
       documentId: doc.id,
-      length: SummaryLength.MEDIUM,
+      length: targetLength,
       title: summaryResult.title,
       summary: summaryResult.summary,
       keyPoints: summaryResult.keyPoints,

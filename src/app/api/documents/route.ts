@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     const anonymousSessionId = (formData.get('anonymousSessionId') as string) || undefined;
     const template = (formData.get('template') as SummaryTemplate) || 'general';
     const language = (formData.get('language') as SupportedLanguage) || 'en';
+    const length = (formData.get('length') as SummaryLength) || SummaryLength.MEDIUM;
 
     if (!file) {
       throw new AppError('VALIDATION_ERROR', 400, 'No file was provided in the upload request.');
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Initiate native processing pipeline asynchronously in the background via BullMQ persistent queue
-    await addDocumentToQueue(document.id, { template, language });
+    await addDocumentToQueue(document.id, { length, template, language });
 
     // 4. Return 202 Accepted representing accepted for background processing
     return NextResponse.json({ document }, { status: 202 });

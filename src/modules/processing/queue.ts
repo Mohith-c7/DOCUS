@@ -13,7 +13,10 @@ const connection = {
   connectTimeout: 1000,
 };
 
+import { SummaryLength } from '@prisma/client';
+
 export interface ProcessDocumentOptions {
+  length?: SummaryLength;
   template?: SummaryTemplate;
   language?: SupportedLanguage;
 }
