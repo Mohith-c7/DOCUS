@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createDocument, updateDocumentStage } from '@/modules/documents/service';
-import { DocumentUploadInitSchema } from '@/modules/validation/schemas';
+import { DocumentUploadInitSchema, SummaryTemplate, SupportedLanguage } from '@/modules/validation/schemas';
 import { formatErrorResponse, AppError } from '@/modules/errors/api-error';
 import { storageProvider } from '@/modules/providers';
 import { addDocumentToQueue } from '@/modules/processing/queue';
