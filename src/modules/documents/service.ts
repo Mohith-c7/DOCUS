@@ -17,6 +17,9 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
   const fileType = getFileTypeFromMime(input.mimeType);
   const storageKey = `uploads/${crypto.randomUUID()}-${input.fileName}`;
 
+  const cleanUserId = typeof input.userId === 'string' && input.userId.trim().length > 0 ? input.userId.trim() : null;
+  const cleanAnonId = typeof input.anonymousSessionId === 'string' && input.anonymousSessionId.trim().length > 0 ? input.anonymousSessionId.trim() : null;
+
   return db.document.create({
     data: {
       originalFileName: input.fileName,
@@ -24,8 +27,8 @@ export async function createDocument(input: CreateDocumentInput): Promise<Docume
       mimeType: input.mimeType,
       fileSizeBytes: input.fileSizeBytes,
       storageKey,
-      userId: input.userId || null,
-      anonymousSessionId: input.anonymousSessionId || null,
+      userId: cleanUserId,
+      anonymousSessionId: cleanAnonId,
       ipAddress: input.ipAddress || null,
       status: DocumentStatus.UPLOADED,
       currentStage: ProcessingStage.UPLOADED,
@@ -63,7 +66,6 @@ export async function updateDocumentStage(
       throw new AppError('DOCUMENT_NOT_FOUND', 404, `Document with ID ${id} not found`);
     }
 
-    // Determine target DocumentStatus from the new ProcessingStage
     let targetStatus: DocumentStatus;
     if (newStage === ProcessingStage.COMPLETED) {
       targetStatus = DocumentStatus.COMPLETED;
@@ -75,7 +77,6 @@ export async function updateDocumentStage(
       targetStatus = DocumentStatus.PROCESSING;
     }
 
-    // Run transition guards
     validateStatusTransition(doc.status, targetStatus);
     validateStageTransition(doc.currentStage, newStage);
 

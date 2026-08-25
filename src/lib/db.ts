@@ -14,6 +14,9 @@ if (!globalForPrisma.prisma) {
     const pool = new Pool({
       connectionString,
       ssl: { rejectUnauthorized: false },
+      max: 5, // Serverless pool constraint to prevent Supabase connection exhaustion
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 5000,
     });
     const adapter = new PrismaPg(pool);
     globalForPrisma.prisma = new PrismaClient({ adapter });
