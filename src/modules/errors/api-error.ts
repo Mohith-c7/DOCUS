@@ -65,14 +65,13 @@ export function formatErrorResponse(error: unknown) {
     };
   }
 
-  // Handle generic errors securely - do not leak details in production
-  const isDev = process.env.NODE_ENV === 'development';
+  const rawMessage = error instanceof Error ? error.message : String(error);
   return {
     status: 500,
     body: {
       error: {
         code: 'INTERNAL_ERROR' as ErrorCode,
-        message: isDev && error instanceof Error ? error.message : 'An unexpected error occurred.',
+        message: rawMessage || 'An unexpected error occurred.',
       },
     },
   };

@@ -254,7 +254,7 @@ export default function Home() {
       const response = await fetch("/api/documents", { method: "POST", body: formData });
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.message || "Failed to upload file.");
+        throw new Error(errJson.error?.message || errJson.message || "Failed to upload file.");
       }
       const data = await response.json();
       const id = data.document.id;

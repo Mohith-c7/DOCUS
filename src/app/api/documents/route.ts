@@ -158,17 +158,21 @@ export async function POST(request: NextRequest) {
     try {
       await storageProvider.upload(buffer, document.storageKey, document.mimeType);
     } catch (storageError) {
-      // Clean up document state on storage write failure
-      await updateDocumentStage(document.id, ProcessingStage.FAILED);
+      console.error(`Storage provider upload failed for document ${document.id}:`, storageError);
+      await updateDocumentStage(document.id, ProcessingStage.FAILED).catch(() => {});
       throw new AppError(
         'STORAGE_ERROR',
         500,
-        `Storage upload failed: ${(storageError as Error).message}`
+        `Storage write error: ${(storageError as Error).message}`
       );
     }
 
-    // 3. Initiate native processing pipeline asynchronously in the background via BullMQ persistent queue
-    await addDocumentToQueue(document.id, { length, template, language });
+    // 3. Initiate native processing pipeline asynchronously in non-blocking background queue
+    try {
+      await addDocumentToQueue(document.id, { length, template, language });
+    } catch (queueErr) {
+      console.warn(`Queue scheduling warning for document ${document.id}:`, queueErr);
+    }
 
     // 4. Return 202 Accepted representing accepted for background processing
     return NextResponse.json({ document }, { status: 202 });
