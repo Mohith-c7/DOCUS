@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import { processDocument } from './pipeline';
 import { SummaryTemplate, SupportedLanguage } from '../validation/schemas';
 import { SummaryLength } from '@prisma/client';
+import { after } from 'next/server';
 
 const redisHost = process.env.REDIS_HOST;
 const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
@@ -53,11 +54,19 @@ export async function addDocumentToQueue(
   const isServerless = process.env.NETLIFY === 'true' || process.env.VERCEL === 'true' || !redisHost;
 
   if (isServerless) {
-    console.log(`Queue: Serverless environment detected. Executing direct pipeline processing for document ${documentId}...`);
+    console.log(`Queue: Serverless environment detected. Scheduling background processing for document ${documentId}...`);
+    const runBackgroundProcessing = async () => {
+      try {
+        await processDocument(documentId, options);
+      } catch (procErr) {
+        console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+      }
+    };
+
     try {
-      await processDocument(documentId, options);
-    } catch (procErr) {
-      console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+      after(runBackgroundProcessing);
+    } catch {
+      runBackgroundProcessing();
     }
     return null;
   }
@@ -72,11 +81,19 @@ export async function addDocumentToQueue(
   try {
     return await addWithTimeout;
   } catch (queueErr) {
-    console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing direct pipeline processing for document ${documentId}...`);
+    console.warn(`Queue: Redis queue unavailable (${(queueErr as Error).message}). Executing background processing for document ${documentId}...`);
+    const runBackgroundProcessing = async () => {
+      try {
+        await processDocument(documentId, options);
+      } catch (procErr) {
+        console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+      }
+    };
+
     try {
-      await processDocument(documentId, options);
-    } catch (procErr) {
-      console.error(`Pipeline processing failed for document ${documentId}:`, procErr);
+      after(runBackgroundProcessing);
+    } catch {
+      runBackgroundProcessing();
     }
     return null;
   }

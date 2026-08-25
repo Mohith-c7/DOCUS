@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20.18.0"
+  NETLIFY_NEXT_FORCE_ADMIN_FETCH = "true"
   NEXT_USE_NETLIFY_EDGE = "false"
 
 [[plugins]]
@@ -11,4 +12,4 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["tesseract.js", "pdf-to-png-converter", "@aws-sdk/client-textract", "pg", "@prisma/client"]
+  external_node_modules = ["tesseract.js", "pdf-to-png-converter", "@aws-sdk/client-textract", "pg", "@prisma/client", "pdf-parse"]
