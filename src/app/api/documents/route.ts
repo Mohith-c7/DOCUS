@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createDocument, updateDocumentStage } from '@/modules/documents/service';
-import { DocumentUploadInitSchema, SummaryTemplate, SupportedLanguage } from '@/modules/validation/schemas';
+import { DocumentUploadInitSchema, SummaryTemplate, SupportedLanguage, normalizeMimeType } from '@/modules/validation/schemas';
 import { formatErrorResponse, AppError } from '@/modules/errors/api-error';
 import { storageProvider } from '@/modules/providers';
 import { addDocumentToQueue } from '@/modules/processing/queue';
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
     let fileName = '';
-    let mimeType = '';
+    let rawMimeType = '';
     let fileSizeBytes = 0;
     let userId: string | undefined;
     let anonymousSessionId: string | undefined;
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('application/json')) {
       const jsonBody = await request.json();
       fileName = jsonBody.fileName || '';
-      mimeType = jsonBody.mimeType || 'application/pdf';
+      rawMimeType = jsonBody.mimeType || 'application/pdf';
       fileSizeBytes = jsonBody.fileSizeBytes || 0;
       userId = jsonBody.userId || undefined;
       anonymousSessionId = jsonBody.anonymousSessionId || undefined;
@@ -106,12 +106,14 @@ export async function POST(request: NextRequest) {
       }
 
       fileName = file.name;
-      mimeType = file.type;
+      rawMimeType = file.type;
       fileSizeBytes = file.size;
 
       const arrayBuffer = await file.arrayBuffer();
       buffer = Buffer.from(arrayBuffer);
     }
+
+    const mimeType = normalizeMimeType(fileName, rawMimeType);
 
     // Server-side validation using Zod
     const validationResult = DocumentUploadInitSchema.safeParse({

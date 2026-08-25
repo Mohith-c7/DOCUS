@@ -89,6 +89,22 @@ export type DocumentUploadInitInput = z.infer<typeof DocumentUploadInitSchema>;
 export type SummaryRequestInput = z.infer<typeof SummaryRequestSchema>;
 export type StructuredSummary = z.infer<typeof StructuredSummarySchema>;
 
+export function normalizeMimeType(fileName: string, rawMimeType?: string): string {
+  const mime = (rawMimeType || '').toLowerCase().trim();
+  if (mime === 'application/pdf' || mime === 'application/x-pdf') return 'application/pdf';
+  if (mime === 'image/png' || mime === 'image/x-png') return 'image/png';
+  if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/pjpeg') return 'image/jpeg';
+  if (mime === 'image/webp') return 'image/webp';
+
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'webp') return 'image/webp';
+
+  return mime || 'application/pdf';
+}
+
 export function getFileTypeFromMime(mimeType: string): FileType {
   if (mimeType === 'application/pdf') {
     return FileType.PDF;
@@ -96,5 +112,5 @@ export function getFileTypeFromMime(mimeType: string): FileType {
   if (mimeType.startsWith('image/')) {
     return FileType.IMAGE;
   }
-  throw new Error(`Unsupported MIME type to FileType mapping: ${mimeType}`);
+  return FileType.PDF;
 }
