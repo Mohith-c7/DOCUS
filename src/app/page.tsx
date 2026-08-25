@@ -242,32 +242,52 @@ export default function Home() {
     setError(null);
     setValidationError(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    if (anonymousSessionId) formData.append("anonymousSessionId", anonymousSessionId);
-    if (user?.id) formData.append("userId", user.id);
-    if (summaryTemplate) formData.append("template", summaryTemplate);
-    if (summaryLanguage) formData.append("language", summaryLanguage);
-    if (summaryLength) formData.append("length", summaryLength);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        const payload = {
+          fileName: file.name,
+          mimeType: file.type || "application/pdf",
+          fileSizeBytes: file.size,
+          fileData: base64Data,
+          anonymousSessionId: anonymousSessionId || undefined,
+          userId: user?.id || undefined,
+          template: summaryTemplate,
+          language: summaryLanguage,
+          length: summaryLength,
+        };
 
-    try {
-      const response = await fetch("/api/documents", { method: "POST", body: formData });
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || errJson.message || "Failed to upload file.");
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(errJson.error?.message || errJson.message || "Failed to upload file.");
+        }
+        const data = await response.json();
+        const id = data.document.id;
+        setDocId(id);
+        updateUrlParams(id);
+        setDocStage(data.document.currentStage);
+        setUploading(false);
+        setPolling(true);
+        fetchStatus(id);
+      } catch (err) {
+        setError((err as Error).message || "Upload error.");
+        setUploading(false);
       }
-      const data = await response.json();
-      const id = data.document.id;
-      setDocId(id);
-      updateUrlParams(id);
-      setDocStage(data.document.currentStage);
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read file from local disk.");
       setUploading(false);
-      setPolling(true);
-      fetchStatus(id);
-    } catch (err) {
-      setError((err as Error).message || "Upload error.");
-      setUploading(false);
-    }
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const handleCopyText = (text: string) => {

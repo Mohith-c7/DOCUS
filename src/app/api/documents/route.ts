@@ -27,21 +27,17 @@ export async function GET(request: NextRequest) {
     } else if (anonymousSessionId) {
       whereClause.anonymousSessionId = anonymousSessionId;
     } else if (clientIp) {
-      // Auto device IP fallback
       whereClause.ipAddress = clientIp;
     }
 
-    // Search filter on file name
     if (search) {
       whereClause.originalFileName = { contains: search, mode: 'insensitive' };
     }
 
-    // Status filter
     if (status) {
       whereClause.status = status as DocumentStatus;
     }
 
-    // Collection filter — join through DocumentCollection
     if (collectionId) {
       whereClause.collections = {
         some: { collectionId },
@@ -55,7 +51,7 @@ export async function GET(request: NextRequest) {
         collections: { select: { collectionId: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 100, // safety cap
+      take: 100,
     });
     return NextResponse.json({ documents });
   } catch (error) {
@@ -66,21 +62,56 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    const userId = (formData.get('userId') as string) || undefined;
-    const anonymousSessionId = (formData.get('anonymousSessionId') as string) || undefined;
-    const template = (formData.get('template') as SummaryTemplate) || 'general';
-    const language = (formData.get('language') as SupportedLanguage) || 'en';
-    const length = (formData.get('length') as SummaryLength) || SummaryLength.MEDIUM;
+    const contentType = request.headers.get('content-type') || '';
+    let fileName = '';
+    let mimeType = '';
+    let fileSizeBytes = 0;
+    let userId: string | undefined;
+    let anonymousSessionId: string | undefined;
+    let template: SummaryTemplate = 'general';
+    let language: SupportedLanguage = 'en';
+    let length: SummaryLength = SummaryLength.MEDIUM;
+    let buffer: Buffer;
 
-    if (!file) {
-      throw new AppError('VALIDATION_ERROR', 400, 'No file was provided in the upload request.');
+    if (contentType.includes('application/json')) {
+      const jsonBody = await request.json();
+      fileName = jsonBody.fileName || '';
+      mimeType = jsonBody.mimeType || 'application/pdf';
+      fileSizeBytes = jsonBody.fileSizeBytes || 0;
+      userId = jsonBody.userId || undefined;
+      anonymousSessionId = jsonBody.anonymousSessionId || undefined;
+      template = (jsonBody.template as SummaryTemplate) || 'general';
+      language = (jsonBody.language as SupportedLanguage) || 'en';
+      length = (jsonBody.length as SummaryLength) || SummaryLength.MEDIUM;
+
+      if (!jsonBody.fileData) {
+        throw new AppError('VALIDATION_ERROR', 400, 'No base64 fileData provided in JSON request.');
+      }
+
+      // Strips data URL prefix if present (e.g. data:application/pdf;base64,...)
+      const base64Clean = jsonBody.fileData.replace(/^data:[^;]+;base64,/, '');
+      buffer = Buffer.from(base64Clean, 'base64');
+      if (fileSizeBytes === 0) fileSizeBytes = buffer.length;
+    } else {
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      userId = (formData.get('userId') as string) || undefined;
+      anonymousSessionId = (formData.get('anonymousSessionId') as string) || undefined;
+      template = (formData.get('template') as SummaryTemplate) || 'general';
+      language = (formData.get('language') as SupportedLanguage) || 'en';
+      length = (formData.get('length') as SummaryLength) || SummaryLength.MEDIUM;
+
+      if (!file) {
+        throw new AppError('VALIDATION_ERROR', 400, 'No file was provided in the upload request.');
+      }
+
+      fileName = file.name;
+      mimeType = file.type;
+      fileSizeBytes = file.size;
+
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
     }
-
-    const fileName = file.name;
-    const mimeType = file.type;
-    const fileSizeBytes = file.size;
 
     // Server-side validation using Zod
     const validationResult = DocumentUploadInitSchema.safeParse({
@@ -97,7 +128,7 @@ export async function POST(request: NextRequest) {
       throw new AppError('VALIDATION_ERROR', 400, 'Invalid file upload parameters.', details);
     }
 
-    // Idempotency / Cache Check: Re-use matching document if uploaded recently and not failed (unless it holds mock summaries)
+    // Idempotency / Cache Check: Re-use matching document if uploaded recently and not failed
     const existingDoc = await db.document.findFirst({
       where: {
         originalFileName: fileName,
@@ -141,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || undefined;
 
-    // 1. Create Document Database entry (status: UPLOADED, stage: UPLOADED)
+    // 1. Create Document Database entry
     const document = await createDocument({
       fileName,
       mimeType,
@@ -152,9 +183,6 @@ export async function POST(request: NextRequest) {
     });
 
     // 2. Upload Binary file to Storage Provider
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     try {
       await storageProvider.upload(buffer, document.storageKey, document.mimeType);
     } catch (storageError) {
@@ -174,7 +202,7 @@ export async function POST(request: NextRequest) {
       console.warn(`Queue scheduling warning for document ${document.id}:`, queueErr);
     }
 
-    // 4. Return 202 Accepted representing accepted for background processing
+    // 4. Return 202 Accepted
     return NextResponse.json({ document }, { status: 202 });
   } catch (error) {
     console.error('API Error in POST /api/documents:', error);
