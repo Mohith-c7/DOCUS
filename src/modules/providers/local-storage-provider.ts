@@ -7,12 +7,14 @@ export class LocalStorageProvider implements StorageProvider {
   private baseDir: string;
 
   constructor(baseDir?: string) {
+    // Detect any serverless container environment (Vercel, Netlify, AWS Lambda, Linux containers)
     const isServerless =
-      process.env.NETLIFY === 'true' ||
-      process.env.VERCEL === 'true' ||
-      process.env.NODE_ENV === 'production';
+      Boolean(process.env.NETLIFY) ||
+      Boolean(process.env.VERCEL) ||
+      process.env.NODE_ENV === 'production' ||
+      process.platform === 'linux';
     
-    // On Serverless (Netlify/AWS Lambda), standard directories are read-only. Use os.tmpdir() (/tmp)
+    // On Serverless, standard relative directories are read-only. Always use os.tmpdir() (/tmp)
     const defaultDir = isServerless
       ? path.join(os.tmpdir(), 'docus_storage')
       : path.resolve('storage');
