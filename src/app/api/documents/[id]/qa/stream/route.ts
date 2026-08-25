@@ -116,17 +116,17 @@ ${textContent}`;
           generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
         };
 
-        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+        const modelsToTry = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
         let geminiResponse: Response | null = null;
 
         for (const targetModel of modelsToTry) {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?key=${apiKey}&alt=sse`;
           try {
             const resp = await fetch(url, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(requestBody),
-              signal: AbortSignal.timeout(45000),
+              signal: AbortSignal.timeout(30000),
             });
             if (resp.ok && resp.body) {
               geminiResponse = resp;
