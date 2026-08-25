@@ -1,5 +1,8 @@
 import { DocumentExtractionProvider, ExtractionResult, StorageProvider } from './types';
-import pdf from 'pdf-parse';
+
+// Import pdf-parse core directly to bypass pdf-parse's index.js debug test file read bug (!module.parent) in Next.js bundled environments
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdf = require('pdf-parse/lib/pdf-parse.js');
 
 export class PDFExtractionProvider implements DocumentExtractionProvider {
   private storage: StorageProvider;
