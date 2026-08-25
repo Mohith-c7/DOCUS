@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getDocumentById } from '@/modules/documents/service';
 import { formatErrorResponse } from '@/modules/errors/api-error';

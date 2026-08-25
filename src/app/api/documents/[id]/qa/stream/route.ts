@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { AppError } from '@/modules/errors/api-error';
