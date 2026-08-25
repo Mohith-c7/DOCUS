@@ -11,7 +11,7 @@ export class GeminiSummarizationProvider implements SummarizationProvider {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-2.5-flash') {
+  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-3.6-flash') {
     this.apiKey = apiKey;
     this.model = model;
     console.log('🔑 Gemini API key loaded (length):', this.apiKey ? this.apiKey.length : 0);
@@ -123,12 +123,7 @@ You MUST strictly output JSON conforming to the schema:
     };
 
     const modelsToTry = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash-exp',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-pro-latest',
-      'gemini-flash',
-      'gemini-pro',
+      'gemini-3.6-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
     ].filter((value, index, self) => self.indexOf(value) === index);
@@ -136,16 +131,15 @@ You MUST strictly output JSON conforming to the schema:
     let lastError: Error | null = null;
 
     for (const targetModel of modelsToTry) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${this.apiKey}`;
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-goog-api-key': this.apiKey,
           },
           body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(20000),
         });
 
         if (!response.ok) {

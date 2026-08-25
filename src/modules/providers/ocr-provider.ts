@@ -110,7 +110,7 @@ export class OCRProvider implements IOCRProvider {
     // Try Gemini Vision OCR if GEMINI_API_KEY is available (Primary AI Vision OCR for images)
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey && geminiApiKey !== 'mock-gemini-api-key-for-foundation') {
-      const visionModels = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-flash'];
+      const visionModels = ['gemini-3.6-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       for (const visionModel of visionModels) {
         try {
           console.log(`[OCR] Attempting Gemini Vision OCR with ${visionModel} for image ${storageKey}...`);
@@ -118,12 +118,11 @@ export class OCRProvider implements IOCRProvider {
           const isPng = buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50;
           const mimeType = isPng ? 'image/png' : 'image/jpeg';
 
-          const visionUrl = `https://generativelanguage.googleapis.com/v1beta/models/${visionModel}:generateContent`;
+          const visionUrl = `https://generativelanguage.googleapis.com/v1beta/models/${visionModel}:generateContent?key=${geminiApiKey}`;
           const visionResp = await fetch(visionUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-goog-api-key': geminiApiKey,
             },
             body: JSON.stringify({
               contents: [
@@ -136,7 +135,7 @@ export class OCRProvider implements IOCRProvider {
                 }
               ]
             }),
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(20000),
           });
 
           if (visionResp.ok) {
