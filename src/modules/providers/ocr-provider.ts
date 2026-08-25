@@ -110,47 +110,50 @@ export class OCRProvider implements IOCRProvider {
     // Try Gemini Vision OCR if GEMINI_API_KEY is available (Primary AI Vision OCR for images)
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey && geminiApiKey !== 'mock-gemini-api-key-for-foundation') {
-      try {
-        console.log(`[OCR] Attempting Gemini Vision multimodal OCR for image ${storageKey}...`);
-        const base64Data = buffer.toString('base64');
-        const isPng = buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50;
-        const mimeType = isPng ? 'image/png' : 'image/jpeg';
+      const visionModels = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-flash'];
+      for (const visionModel of visionModels) {
+        try {
+          console.log(`[OCR] Attempting Gemini Vision OCR with ${visionModel} for image ${storageKey}...`);
+          const base64Data = buffer.toString('base64');
+          const isPng = buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50;
+          const mimeType = isPng ? 'image/png' : 'image/jpeg';
 
-        const visionUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
-        const visionResp = await fetch(visionUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': geminiApiKey,
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  { text: 'Transcribe all text, titles, headings, and detailed information visible in this image accurately.' },
-                  { inlineData: { mimeType, data: base64Data } }
-                ]
-              }
-            ]
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
+          const visionUrl = `https://generativelanguage.googleapis.com/v1beta/models/${visionModel}:generateContent`;
+          const visionResp = await fetch(visionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-goog-api-key': geminiApiKey,
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: 'Transcribe all text, titles, headings, and detailed information visible in this image accurately.' },
+                    { inlineData: { mimeType, data: base64Data } }
+                  ]
+                }
+              ]
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
 
-        if (visionResp.ok) {
-          const visionJson = await visionResp.json();
-          const visionText = visionJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (visionText.trim().length >= 10) {
-            console.log(`[OCR] Gemini Vision extracted ${visionText.trim().length} characters from image!`);
-            return {
-              text: visionText.trim(),
-              characterCount: visionText.trim().length,
-              pageCount: 1,
-            };
+          if (visionResp.ok) {
+            const visionJson = await visionResp.json();
+            const visionText = visionJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (visionText.trim().length >= 10) {
+              console.log(`[OCR] Gemini Vision (${visionModel}) extracted ${visionText.trim().length} characters from image!`);
+              return {
+                text: visionText.trim(),
+                characterCount: visionText.trim().length,
+                pageCount: 1,
+              };
+            }
           }
+        } catch (visionErr) {
+          console.warn(`[OCR] Gemini Vision (${visionModel}) failed:`, visionErr);
         }
-      } catch (visionErr) {
-        console.warn(`[OCR] Gemini Vision OCR failed, falling back to Textract/Tesseract:`, visionErr);
       }
     }
 
@@ -163,7 +166,6 @@ export class OCRProvider implements IOCRProvider {
         });
         const response = await this.textractClient.send(command);
         
-        // Extract all Text blocks of type LINE
         const lines = (response.Blocks || [])
           .filter((block) => block.BlockType === 'LINE')
           .map((block) => block.Text || '')

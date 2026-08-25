@@ -11,7 +11,7 @@ export class GeminiSummarizationProvider implements SummarizationProvider {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-2.0-flash') {
+  constructor(apiKey: string = process.env.GEMINI_API_KEY || '', model: string = 'gemini-2.5-flash') {
     this.apiKey = apiKey;
     this.model = model;
     console.log('🔑 Gemini API key loaded (length):', this.apiKey ? this.apiKey.length : 0);
@@ -122,9 +122,16 @@ You MUST strictly output JSON conforming to the schema:
       },
     };
 
-    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-flash-latest'].filter(
-      (value, index, self) => self.indexOf(value) === index
-    );
+    const modelsToTry = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro-latest',
+      'gemini-flash',
+      'gemini-pro',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+    ].filter((value, index, self) => self.indexOf(value) === index);
 
     let lastError: Error | null = null;
 
@@ -138,19 +145,14 @@ You MUST strictly output JSON conforming to the schema:
             'X-goog-api-key': this.apiKey,
           },
           body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(45000),
+          signal: AbortSignal.timeout(15000),
         });
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
           console.error(`[Gemini API Error] Model ${targetModel} returned status ${response.status}:`, errorText);
-
-          if ([404, 503, 429].includes(response.status) && modelsToTry.indexOf(targetModel) < modelsToTry.length - 1) {
-            console.warn(`[Gemini Fallback] Trying next candidate model...`);
-            lastError = new Error(`Gemini API returned HTTP status ${response.status}: ${errorText}`);
-            continue;
-          }
-          throw new Error(`Gemini API returned HTTP status ${response.status}: ${errorText}`);
+          lastError = new Error(`Gemini API model ${targetModel} returned status ${response.status}: ${errorText}`);
+          continue;
         }
 
         const json = await response.json();
@@ -175,14 +177,7 @@ You MUST strictly output JSON conforming to the schema:
       } catch (error) {
         if (error instanceof AppError) throw error;
         lastError = error as Error;
-        const isFallbackStatus =
-          (error as Error).message.includes('404') ||
-          (error as Error).message.includes('503') ||
-          (error as Error).message.includes('429');
-        if (isFallbackStatus && modelsToTry.indexOf(targetModel) < modelsToTry.length - 1) {
-          continue;
-        }
-        break;
+        console.warn(`[Gemini Fallback] Candidate model ${targetModel} failed (${(error as Error).message}). Trying next candidate...`);
       }
     }
 
